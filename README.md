@@ -1,21 +1,59 @@
-```txt
-npm install
-npm run dev
-```
+# 스마트스토어 자가진단 (SmartStore Self-Diagnosis)
 
-```txt
-npm run deploy
-```
+네이버 **스마트스토어 상품 최적화 자가진단** 프로그램. 네이버플레이스 자가진단(naverplace)을 참고해 동일한 형태(3단계 SPA + 점수/등급 리포트)로 제작했습니다.
 
-[For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
+## 프로젝트 개요
+- **목표**: 스마트스토어 상품의 검색 노출 최적화 상태를 점검하고 100점 만점 점수·등급·개선 가이드 제공
+- **방식**: **하이브리드** — 공개 페이지 자동 수집 + 관리자 항목 체크리스트 보완
+- **기술 스택**: Hono + Vite + Cloudflare Pages + Pretendard/FontAwesome (CDN)
 
-```txt
-npm run cf-typegen
-```
+## 현재 구현된 기능
+1. **Stage 1 — URL 입력**: 스마트스토어 상품 URL 입력 또는 URL 없이 체크리스트만 진단
+2. **Stage 2 — 자동수집 + 체크리스트**:
+   - 공개 페이지에서 상품명/가격/이미지수/리뷰수/별점 자동 수집
+   - 자동 채점 가능 항목은 `자동` 배지로 표시, 나머지는 체크리스트 응답
+3. **Stage 3 — 리포트**: 총점·등급(S/A/B/C/D), 영역별 점수, 개선 우선순위 TOP5, PDF 저장
 
-Pass the `CloudflareBindings` as generics when instantiation `Hono`:
+## 진단 항목 체계 (6개 영역 · 23개 항목 · 100점)
+| 영역 | 배점 | 주요 항목 |
+|------|------|-----------|
+| 상품명·키워드 | 22 | 상품명 길이(자동), 핵심 키워드, 어뷰징, 모델명 고유성 |
+| 카테고리·속성 | 22 | 카테고리 정확도, 하위 카테고리, 상품속성, 브랜드/제조사 |
+| 이미지 | 20 | 이미지 수(자동), 누끼 대표컷, 고해상도, 구성 다양성 |
+| 태그 | 12 | 태그 10개, 키워드 구성, 어뷰징 없음 |
+| 리뷰·신뢰도 | 14 | 리뷰 수(자동), 별점(자동), 리뷰 포인트, 포토리뷰 우대 |
+| 배송·운영 | 10 | 배송비, 출고예정일, 도서산간, 상품정보제공고시 |
 
-```ts
-// src/index.ts
-const app = new Hono<{ Bindings: CloudflareBindings }>()
-```
+## 기능 진입 URI (API)
+| 메서드 | 경로 | 파라미터 | 설명 |
+|--------|------|----------|------|
+| `GET` | `/` | - | 메인 3단계 SPA |
+| `GET` | `/api/store` | `url` (쿼리) | 공개 페이지 자동수집 결과(JSON) |
+| `GET` | `/api/criteria` | - | 진단 항목 정의(JSON) |
+| `POST` | `/api/diagnose` | body: `{ store?, url?, answers }` | 통합 진단 결과(JSON) |
+
+## 데이터 구조
+- **StoreData** (자동수집): productId, name, nameLength, category, price, imageCount, reviewCount, starRating, collected[]
+- **DiagnoseResult** (진단결과): totalScore, grade, groups[], topImprovements[]
+- **저장소**: 없음 (Stateless) — 진단 즉시 처리 후 폐기
+
+## 사용 방법
+1. 스마트스토어 상품 URL을 붙여넣고 `진단 시작`
+2. 자동 수집된 정보 확인 → 관리자에서만 보이는 항목 체크
+3. `결과 보기`로 점수·등급·개선 우선순위 확인, 필요 시 PDF 저장
+
+## 미구현 / 다음 단계
+- [ ] 자동수집 정확도 향상 (스마트스토어 PRELOADED_STATE 구조 실측 보정)
+- [ ] 리뷰 키워드/AI 요약 분석 (네이버플레이스의 AI 브리핑 유사)
+- [ ] 카테고리 자동 판별 및 업종별 가중치
+- [ ] 결과 공유 링크 / 이미지 저장
+- [ ] PDF 디자인 개선 (html2pdf 적용)
+
+## 배포
+- **플랫폼**: Cloudflare Pages
+- **상태**: 🚧 로컬 개발 중 (sandbox)
+- **개발 서버**: PM2 + `wrangler pages dev` (port 3000)
+- **최종 수정**: 2026-06-16
+
+## ⚠️ 주의
+본 진단은 네이버 공식 점수가 아니라 공개 자료(블로그·콘텐츠) 기반의 최적화 가이드입니다. 자동 크롤링은 네이버 페이지 구조 변경 시 동작이 달라질 수 있습니다.
