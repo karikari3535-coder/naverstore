@@ -119,6 +119,12 @@ button{font-family:inherit;cursor:pointer}
 .cl-opt input{accent-color:var(--green);width:18px;height:18px}
 .cl-opt.selected{border-color:var(--green);background:var(--green-soft)}
 .cl-auto-filled{font-size:13px;color:var(--green);font-weight:600;display:flex;align-items:center;gap:6px;background:var(--green-soft);border-radius:10px;padding:12px 14px}
+.manual-box{display:flex;align-items:center;gap:8px;background:#fff7ed;border:1.5px dashed #fdba74;border-radius:10px;padding:10px 14px;font-size:14px}
+.manual-box i{color:#ea580c}
+.manual-label{color:var(--gray-700);font-weight:600}
+.manual-input{flex:1;min-width:60px;max-width:140px;margin-left:auto;border:1.5px solid var(--gray-300);border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit}
+.manual-input:focus{outline:none;border-color:var(--green)}
+.manual-unit{color:var(--gray-500);font-size:13px}
 .checklist-actions{display:flex;gap:12px;margin:8px 0 40px}
 .checklist-actions .btn{flex:1}
 

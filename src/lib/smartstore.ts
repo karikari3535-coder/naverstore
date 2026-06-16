@@ -44,6 +44,8 @@ export interface StoreData {
   collected: string[]
   /** 수집 실패/부분 수집 여부 메모 */
   notes: string[]
+  /** 네이버 봇 차단(429/490/418/403)으로 자동수집이 막혔는지 */
+  blocked: boolean
 }
 
 /* ------------------------------------------------------------------ */
@@ -229,14 +231,31 @@ export async function fetchStoreData(inputUrl: string): Promise<StoreData> {
   const notes: string[] = []
   const collected: string[] = []
 
-  // 모바일 상품 페이지 HTML fetch
-  const headers = {
-    'User-Agent': MOBILE_UA,
-    Accept: 'text/html,application/xhtml+xml',
-    'Accept-Language': 'ko-KR,ko;q=0.9',
-  }
+  // 브라우저에 가깝게 보이도록 헤더를 구성한다.
+  // (스마트스토어는 데이터센터/봇 트래픽을 429/490/418로 강하게 차단하므로,
+  //  여러 UA·Referer 조합으로 시도하되 실패 시 우아하게 폴백한다.)
+  const headerSets = [
+    {
+      'User-Agent': MOBILE_UA,
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+      Referer: 'https://m.search.naver.com/',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'cross-site',
+      'Upgrade-Insecure-Requests': '1',
+    },
+    {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'ko-KR,ko;q=0.9',
+      Referer: 'https://search.shopping.naver.com/',
+    },
+  ]
 
   let html: string | null = null
+  let blocked = false
   // 가능한 경로 후보 (스토어명이 있으면 정확 경로 우선)
   const candidates: string[] = []
   if (storeName) {
@@ -246,18 +265,41 @@ export async function fetchStoreData(inputUrl: string): Promise<StoreData> {
   // 폴백: 원본 URL 그대로
   candidates.push(url)
 
-  for (const target of candidates) {
-    try {
-      const res = await fetch(target, { headers, redirect: 'follow' })
-      if (res.ok) {
-        const text = await res.text()
-        if (text && text.length > 2000) {
-          html = text
-          break
+  outer: for (const target of candidates) {
+    for (const hs of headerSets) {
+      try {
+        const res = await fetch(target, { headers: hs, redirect: 'follow' })
+        // 차단 코드 감지 (429: Too Many Requests, 490/418: 네이버 봇 차단)
+        if (res.status === 429 || res.status === 490 || res.status === 418 || res.status === 403) {
+          blocked = true
+          continue
         }
+        const text = await res.text()
+        // (1) 에러/차단 안내 페이지 감지 (status 200이어도 본문이 에러일 수 있음)
+        const head = text.slice(0, 3000)
+        if (/에러페이지|error-page|일시적으로|접근이 제한|too many requests/i.test(head)) {
+          blocked = true
+          continue
+        }
+        // (2) 네이버 로그인/캡차 셸 감지 (봇 차단의 또 다른 형태)
+        //     og:title="네이버" + 로그인 유도 문구 → 상품 페이지 아님
+        const ogTitleNaver = /property=["']og:title["']\s+content=["']네이버["']/.test(text)
+        const loginShell =
+          ogTitleNaver || /나를 위한 다양한 서비스|로그인 하고|captcha|자동입력 방지/i.test(head)
+        if (loginShell && !text.includes('__PRELOADED_STATE__')) {
+          blocked = true
+          continue
+        }
+        // (3) 유효한 상품 페이지 신호 확인
+        if (res.ok && text && text.length > 5000) {
+          if (text.includes('__PRELOADED_STATE__') || /application\/ld\+json/.test(text)) {
+            html = text
+            break outer
+          }
+        }
+      } catch {
+        /* try next */
       }
-    } catch {
-      /* try next */
     }
   }
 
@@ -275,10 +317,17 @@ export async function fetchStoreData(inputUrl: string): Promise<StoreData> {
     starRating: null,
     collected,
     notes,
+    blocked,
   }
 
   if (!html) {
-    notes.push('공개 페이지를 가져오지 못했어요. 자동 수집 없이 체크리스트로 진단해요.')
+    if (blocked) {
+      notes.push(
+        '네이버가 외부 자동 수집을 차단했어요(정상 동작). 아래 자동 채점 항목은 직접 입력하고, 나머지는 체크리스트로 진단해요.'
+      )
+    } else {
+      notes.push('공개 페이지를 가져오지 못했어요. 자동 수집 없이 체크리스트로 진단해요.')
+    }
     return data
   }
 
@@ -359,14 +408,44 @@ export async function fetchStoreData(inputUrl: string): Promise<StoreData> {
     }
   }
 
-  // 3) 메타 태그 폴백 (og:title 등)
+  // 3) 메타 태그 폴백 (og:title 등) — content/property 순서 양방향 매칭
+  const metaContent = (prop: string): string | null => {
+    const re1 = new RegExp(
+      `<meta[^>]+property=["']${prop}["'][^>]+content=["']([^"']+)["']`,
+      'i'
+    )
+    const re2 = new RegExp(
+      `<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${prop}["']`,
+      'i'
+    )
+    const m = html!.match(re1) || html!.match(re2)
+    return m ? m[1] : null
+  }
+
   if (!data.name) {
-    const og = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
-    if (og) {
-      data.name = og[1].replace(/\s*:\s*네이버.*$/, '').trim()
-      data.nameLength = data.name.length
-      if (!collected.includes('name')) collected.push('name')
+    const ogt = metaContent('og:title')
+    if (ogt) {
+      const cleaned = ogt
+        .replace(/\s*:\s*네이버.*$/, '')
+        .replace(/\s*-\s*네이버.*$/, '')
+        .replace(/\s*\|\s*네이버.*$/, '')
+        .trim()
+      if (cleaned && cleaned !== '네이버' && cleaned.length >= 2) {
+        data.name = cleaned
+        data.nameLength = data.name.length
+        if (!collected.includes('name')) collected.push('name')
+      }
     }
+  }
+  // 대표 이미지 폴백
+  if (!data.imageUrl) {
+    const ogi = metaContent('og:image')
+    if (ogi) data.imageUrl = ogi
+  }
+  // 카테고리 폴백 (product:category 등)
+  if (!data.category) {
+    const cat = metaContent('product:category') || metaContent('og:description')
+    if (cat && metaContent('product:category')) data.category = cat
   }
 
   if (collected.length === 0) {

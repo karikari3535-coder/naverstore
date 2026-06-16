@@ -3,7 +3,7 @@ export const CLIENT_JS = `
   'use strict';
 
   var CRITERIA = window.__CRITERIA__ || [];
-  var state = { store: null, answers: {}, result: null };
+  var state = { store: null, answers: {}, manual: {}, result: null };
 
   // ---- DOM helpers ----
   function $(id){ return document.getElementById(id); }
@@ -60,10 +60,27 @@ export const CLIENT_JS = `
   // ---- Stage 2: 자동수집 카드 + 체크리스트 ----
   function renderAutoCard(store, warnMsg){
     if(!store){
-      return '<div class="auto-card"><h3><i class="fas fa-triangle-exclamation"></i> 자동 수집 없음</h3>'+
+      return '<h3><i class="fas fa-triangle-exclamation"></i> 자동 수집 없음</h3>'+
         '<p style="font-size:14px;color:var(--gray-500)">'+
-        esc(warnMsg||'URL 없이 체크리스트로만 진단해요. 아래 항목을 직접 선택해주세요.')+'</p></div>';
+        esc(warnMsg||'URL 없이 체크리스트로만 진단해요. 아래 항목을 직접 입력/선택해주세요.')+'</p>';
     }
+
+    // 자동 수집이 하나도 안 됐거나 네이버가 차단한 경우 → 직접 입력 안내
+    var nothingCollected = !store.collected || store.collected.length===0;
+    if(store.blocked || nothingCollected){
+      var msg = store.blocked
+        ? '네이버가 외부 자동 수집을 차단했어요. (스마트스토어는 플레이스와 달리 봇 접근이 막혀 있어요)'
+        : '공개 페이지에서 정보를 가져오지 못했어요.';
+      var html0 = '<h3><i class="fas fa-keyboard"></i> 직접 입력 모드</h3>';
+      html0 += '<p style="font-size:14px;color:var(--gray-600);line-height:1.6">'+esc(msg)+
+        '<br/>아래 <b>주황색 칸</b>에 상품명 글자수·이미지 수·리뷰 수·별점을 직접 입력하면 그 항목도 자동 채점돼요. 나머지는 체크리스트로 진단합니다.</p>';
+      html0 += '<div class="auto-prod" style="margin-top:14px">';
+      html0 += '<div><div class="pname">'+esc(store.name||store.storeName||'상품 #'+esc(store.productId))+'</div>'+
+               '<div class="pmeta">상품 ID: '+esc(store.productId)+(store.storeName?(' · '+esc(store.storeName)):'')+'</div></div>';
+      html0 += '</div>';
+      return html0;
+    }
+
     var price = store.price!=null ? store.price.toLocaleString()+'원' : '-';
     var html = '<h3><i class="fas fa-bolt"></i> 자동 수집 결과</h3>';
     html += '<div class="auto-prod">';
@@ -128,6 +145,9 @@ export const CLIENT_JS = `
 
         if(autoFilled){
           html += '<div class="cl-auto-filled"><i class="fas fa-bolt"></i>'+esc(autoValueLabel(store,it.key))+'</div>';
+        } else if(AUTO_KEYS[it.key]){
+          // 자동 채점 항목인데 수집 실패 → 사용자가 직접 숫자 입력
+          html += renderManualInput(it.key);
         } else if(it.options){
           html += '<div class="cl-options" data-key="'+esc(it.key)+'">';
           it.options.forEach(function(opt,i){
@@ -155,6 +175,30 @@ export const CLIENT_JS = `
         label.classList.add('selected');
       });
     });
+
+    // 수동 숫자 입력 핸들러 (자동수집 실패 시)
+    form.querySelectorAll('.manual-input').forEach(function(inp){
+      inp.addEventListener('input', function(){
+        var key = inp.getAttribute('data-key');
+        var v = inp.value.trim();
+        state.manual[key] = v === '' ? null : parseFloat(v);
+      });
+    });
+  }
+
+  // 자동 항목별 수동 입력 UI (수집 실패 시 직접 입력 → 자동 채점에 반영)
+  var MANUAL_META = {
+    name_length:  { label:'상품명 글자수(공백 포함)', unit:'자',  ph:'예: 38' },
+    img_count:    { label:'등록한 이미지 수(대표 포함)', unit:'장', ph:'예: 8' },
+    review_count: { label:'총 리뷰 수', unit:'개', ph:'예: 152' },
+    review_rating:{ label:'평균 별점(0~5)', unit:'점', ph:'예: 4.8' }
+  };
+  function renderManualInput(key){
+    var m = MANUAL_META[key]; if(!m) return '';
+    return '<div class="manual-box"><i class="fas fa-keyboard"></i>'+
+      '<span class="manual-label">'+esc(m.label)+'</span>'+
+      '<input class="manual-input" data-key="'+esc(key)+'" type="number" inputmode="decimal" min="0" step="any" placeholder="'+esc(m.ph)+'"/>'+
+      '<span class="manual-unit">'+esc(m.unit)+'</span></div>';
   }
   function groupMax(g){ return g.items.reduce(function(s,it){return s+it.max;},0); }
 
@@ -165,8 +209,20 @@ export const CLIENT_JS = `
     $('diagnoseBtn').disabled=true;
     $('diagnoseBtn').innerHTML='<i class="fas fa-spinner fa-spin"></i> 분석 중…';
 
-    var payload = { store: state.store, answers: state.answers };
-    if(!state.store){ payload.name = ''; }
+    // 자동수집 실패 항목에 사용자가 직접 입력한 값을 store에 병합
+    var store = state.store ? JSON.parse(JSON.stringify(state.store)) : {
+      productId:'-', storeName:null, name:'', nameLength:0, category:null, price:null,
+      imageUrl:null, imageCount:null, reviewCount:null, starRating:null,
+      collected:[], notes:[], blocked:false
+    };
+    var m = state.manual;
+    function addCollected(k){ if(store.collected.indexOf(k)<0) store.collected.push(k); }
+    if(m.name_length!=null && !isNaN(m.name_length)){ store.nameLength=m.name_length; if(!store.name) store.name='(직접 입력)'; addCollected('name'); }
+    if(m.img_count!=null && !isNaN(m.img_count)){ store.imageCount=m.img_count; addCollected('imageCount'); }
+    if(m.review_count!=null && !isNaN(m.review_count)){ store.reviewCount=m.review_count; addCollected('reviewCount'); }
+    if(m.review_rating!=null && !isNaN(m.review_rating)){ store.starRating=m.review_rating; addCollected('starRating'); }
+
+    var payload = { store: store, answers: state.answers };
 
     fetch('/api/diagnose', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -244,7 +300,7 @@ export const CLIENT_JS = `
   }
 
   $('restartBtn').addEventListener('click', function(){
-    state={store:null,answers:{},result:null};
+    state={store:null,answers:{},manual:{},result:null};
     $('urlInput').value='';
     show('stage1');
   });
