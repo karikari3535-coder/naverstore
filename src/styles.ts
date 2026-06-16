@@ -141,6 +141,21 @@ button{font-family:inherit;cursor:pointer}
 .report-section-title{font-size:18px;font-weight:800;margin:30px 0 14px;display:flex;align-items:center;gap:8px}
 .report-section-title i{color:var(--green)}
 
+/* ===== 랭킹 3대 축 카드 ===== */
+.axis-formula{text-align:center;font-size:15px;color:var(--gray-700);margin:-6px 0 16px}
+.axis-formula b{color:var(--ink);font-size:16px}
+.axis-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:6px}
+@media(max-width:640px){.axis-grid{grid-template-columns:1fr;gap:12px}}
+.axis-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 18px;text-align:center;border-top:4px solid var(--axis);position:relative}
+.axis-icon{width:48px;height:48px;border-radius:14px;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;background:var(--axis)}
+.axis-title{font-weight:800;font-size:17px}
+.axis-sub{font-size:12px;color:var(--gray-500);margin-top:4px;min-height:32px;line-height:1.4}
+.axis-score{font-size:30px;font-weight:800;margin:8px 0 2px;color:var(--axis)}
+.axis-score small{font-size:15px;font-weight:600;color:var(--gray-400)}
+.axis-bar{height:8px;background:var(--gray-100);border-radius:8px;overflow:hidden;margin:8px 0 6px}
+.axis-bar-fill{height:100%;border-radius:8px;background:var(--axis);transition:width .9s ease}
+.axis-rate{font-size:13px;font-weight:700;color:var(--gray-600)}
+
 /* 영역별 점수 카드 */
 .group-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
 .group-card-head{display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid var(--gray-100)}

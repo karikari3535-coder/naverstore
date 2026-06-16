@@ -18,7 +18,7 @@ export function renderHome(): string {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>스마트스토어 자가진단 | SmartStore Self-Diagnosis</title>
-  <meta name="description" content="네이버 스마트스토어 상품 최적화 자가진단 — 상품명·카테고리·이미지·태그·리뷰·배송 6개 영역 23개 항목을 진단하고 100점 만점 점수와 개선 가이드를 제공합니다." />
+  <meta name="description" content="네이버 스마트스토어 상품 최적화 자가진단 — 쇼핑검색 랭킹 3대 축(적합도·인기도·신뢰도) 21개 항목을 진단하고 100점 만점 점수와 개선 가이드를 제공합니다." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2303c75a'/%3E%3Ctext x='50' y='70' font-size='60' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3ES%3C/text%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
   <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet" />
@@ -67,8 +67,8 @@ export function renderHome(): string {
 
           <ul class="feature-list">
             <li><i class="fas fa-bolt"></i> 공개 정보 자동 수집(상품명·이미지·리뷰·별점)</li>
-            <li><i class="fas fa-list-check"></i> 6개 영역 23개 항목 정밀 진단</li>
-            <li><i class="fas fa-ranking-star"></i> 점수·등급 + 개선 우선순위 제공</li>
+            <li><i class="fas fa-ranking-star"></i> 쇼핑검색 랭킹 3대 축 — 적합도 × 인기도 × 신뢰도</li>
+            <li><i class="fas fa-list-check"></i> 21개 항목 정밀 진단 + 개선 우선순위 제공</li>
           </ul>
 
           <p class="disclaimer">

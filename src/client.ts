@@ -16,7 +16,7 @@ export const CLIENT_JS = `
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 
   // 자동 채점되는 항목 키 (체크리스트에서 자동 표시)
-  var AUTO_KEYS = { name_length:1, img_count:1, review_count:1, review_rating:1 };
+  var AUTO_KEYS = { name_length:1, img_quality:1, review_count:1, review_rating:1 };
 
   // ---- Stage 1: 입력 ----
   function validUrl(u){
@@ -110,14 +110,14 @@ export const CLIENT_JS = `
   function hasAutoValue(store, key){
     if(!store) return false;
     if(key==='name_length') return store.collected && store.collected.indexOf('name')>=0 && store.nameLength>0;
-    if(key==='img_count') return store.collected && store.collected.indexOf('imageCount')>=0 && store.imageCount!=null;
+    if(key==='img_quality') return store.collected && store.collected.indexOf('imageCount')>=0 && store.imageCount!=null;
     if(key==='review_count') return store.collected && store.collected.indexOf('reviewCount')>=0 && store.reviewCount!=null;
     if(key==='review_rating') return store.collected && store.collected.indexOf('starRating')>=0 && store.starRating!=null;
     return false;
   }
   function autoValueLabel(store, key){
     if(key==='name_length') return store.nameLength+'자 (자동 채점)';
-    if(key==='img_count') return store.imageCount+'장 (자동 채점)';
+    if(key==='img_quality') return store.imageCount+'장 (자동 채점)';
     if(key==='review_count') return store.reviewCount.toLocaleString()+'개 (자동 채점)';
     if(key==='review_rating') return store.starRating.toFixed(2)+'점 (자동 채점)';
     return '자동 채점';
@@ -189,7 +189,7 @@ export const CLIENT_JS = `
   // 자동 항목별 수동 입력 UI (수집 실패 시 직접 입력 → 자동 채점에 반영)
   var MANUAL_META = {
     name_length:  { label:'상품명 글자수(공백 포함)', unit:'자',  ph:'예: 38' },
-    img_count:    { label:'등록한 이미지 수(대표 포함)', unit:'장', ph:'예: 8' },
+    img_quality:  { label:'등록한 이미지 수(대표 포함)', unit:'장', ph:'예: 8' },
     review_count: { label:'총 리뷰 수', unit:'개', ph:'예: 152' },
     review_rating:{ label:'평균 별점(0~5)', unit:'점', ph:'예: 4.8' }
   };
@@ -218,7 +218,7 @@ export const CLIENT_JS = `
     var m = state.manual;
     function addCollected(k){ if(store.collected.indexOf(k)<0) store.collected.push(k); }
     if(m.name_length!=null && !isNaN(m.name_length)){ store.nameLength=m.name_length; if(!store.name) store.name='(직접 입력)'; addCollected('name'); }
-    if(m.img_count!=null && !isNaN(m.img_count)){ store.imageCount=m.img_count; addCollected('imageCount'); }
+    if(m.img_quality!=null && !isNaN(m.img_quality)){ store.imageCount=m.img_quality; addCollected('imageCount'); }
     if(m.review_count!=null && !isNaN(m.review_count)){ store.reviewCount=m.review_count; addCollected('reviewCount'); }
     if(m.review_rating!=null && !isNaN(m.review_rating)){ store.starRating=m.review_rating; addCollected('starRating'); }
 
@@ -255,6 +255,24 @@ export const CLIENT_JS = `
     html += '<div class="report-grade"><b>'+esc(r.grade)+'등급</b> · '+esc(r.gradeLabel)+'</div>';
     html += '<div class="gauge"><div class="gauge-fill" style="width:0%"></div></div>';
     html += '</div>';
+
+    // 랭킹 3대 축 (적합도 × 인기도 × 신뢰도)
+    if(r.axes && r.axes.length){
+      html += '<div class="report-section-title"><i class="fas fa-ranking-star"></i> 네이버 쇼핑검색 랭킹 3대 축</div>';
+      html += '<div class="axis-formula">랭킹 = <b>적합도</b> × <b>인기도</b> × <b>신뢰도</b></div>';
+      html += '<div class="axis-grid">';
+      r.axes.forEach(function(ax){
+        html += '<div class="axis-card" style="--axis:'+esc(ax.color)+'">';
+        html += '<div class="axis-icon"><i class="fas '+esc(ax.icon)+'"></i></div>';
+        html += '<div class="axis-title">'+esc(ax.title)+'</div>';
+        html += '<div class="axis-sub">'+esc(ax.subtitle)+'</div>';
+        html += '<div class="axis-score">'+ax.score+'<small> / '+ax.max+'</small></div>';
+        html += '<div class="axis-bar"><div class="axis-bar-fill" style="width:0%" data-w="'+ax.rate+'"></div></div>';
+        html += '<div class="axis-rate">'+ax.rate+'%</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
 
     // 영역별
     html += '<div class="report-section-title"><i class="fas fa-layer-group"></i> 영역별 점수</div>';
@@ -296,6 +314,7 @@ export const CLIENT_JS = `
       var rate = Math.round(r.totalScore / r.totalMax * 100);
       var gf = document.querySelector('.gauge-fill'); if(gf) gf.style.width = rate+'%';
       document.querySelectorAll('.gbar-fill').forEach(function(el){ el.style.width = el.getAttribute('data-w')+'%'; });
+      document.querySelectorAll('.axis-bar-fill').forEach(function(el){ el.style.width = el.getAttribute('data-w')+'%'; });
     }, 100);
   }
 

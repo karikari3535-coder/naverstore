@@ -9,7 +9,7 @@
  *  - 항목별 점수/등급, 영역별 합계, 총점/등급, 개선 우선순위(Top)
  */
 
-import { CRITERIA, CriteriaItem } from './criteria'
+import { CRITERIA, CriteriaItem, AXES, AxisKey } from './criteria'
 import type { StoreData } from './smartstore'
 
 export interface ItemResult {
@@ -32,10 +32,22 @@ export interface GroupResult {
   key: string
   title: string
   icon: string
+  axis: AxisKey
   score: number
   max: number
   rate: number // 0~100
   items: ItemResult[]
+}
+
+export interface AxisResult {
+  key: AxisKey
+  title: string
+  subtitle: string
+  color: string
+  icon: string
+  score: number
+  max: number
+  rate: number // 0~100
 }
 
 export interface DiagnoseResult {
@@ -49,6 +61,8 @@ export interface DiagnoseResult {
   totalMax: number
   grade: string
   gradeLabel: string
+  /** 랭킹 3대 축(적합도/인기도/신뢰도)별 집계 */
+  axes: AxisResult[]
   groups: GroupResult[]
   /** 개선 우선 항목 (감점 큰 순) */
   topImprovements: ItemResult[]
@@ -87,7 +101,7 @@ function scoreAuto(
       else ratio = 0.3 // 15자 미만
       return { score: Math.round(item.max * ratio), value: `${len}자` }
     }
-    case 'img_count': {
+    case 'img_quality': {
       if (!store.collected.includes('imageCount') || store.imageCount === null) return null
       const cnt = store.imageCount
       let ratio: number
@@ -215,12 +229,30 @@ export function diagnose(
       key: g.key,
       title: g.title,
       icon: g.icon,
+      axis: g.axis,
       score: gScore,
       max: gMax,
       rate: gMax ? Math.round((gScore / gMax) * 100) : 0,
       items,
     })
   }
+
+  // 랭킹 3대 축별 집계
+  const axes: AxisResult[] = AXES.map((ax) => {
+    const axisGroups = groups.filter((gr) => gr.axis === ax.key)
+    const score = axisGroups.reduce((s, gr) => s + gr.score, 0)
+    const max = axisGroups.reduce((s, gr) => s + gr.max, 0)
+    return {
+      key: ax.key,
+      title: ax.title,
+      subtitle: ax.subtitle,
+      color: ax.color,
+      icon: ax.icon,
+      score,
+      max,
+      rate: max ? Math.round((score / max) * 100) : 0,
+    }
+  })
 
   const { grade, label } = calcGrade(totalScore)
 
@@ -241,6 +273,7 @@ export function diagnose(
     totalMax,
     grade,
     gradeLabel: label,
+    axes,
     groups,
     topImprovements,
     autoSummary: {
