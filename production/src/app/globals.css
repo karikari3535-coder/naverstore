@@ -1,0 +1,10 @@
+:root {
+  --sl-bg: #FDF6F0; --sl-card: #FFF; --sl-ink: #2A2420; --sl-gray: #8A817A;
+  --sl-line: #EFE6DC; --sl-soft: #FFFBF7;
+  --sl-primary: #FF6B4A; --sl-primary-dark: #E5512F;
+  --sl-green: #1FA37A; --sl-yellow: #E8A33D; --sl-red: #E5604D;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--sl-bg); color: var(--sl-ink); line-height: 1.6;
+  font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+  -webkit-font-smoothing: antialiased; }

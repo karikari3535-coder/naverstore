@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>셀러랩스 | 상품명 추천기 (독립 데모)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>
+  :root{
+    --bg:#FDF6F0; --card:#FFF; --ink:#2A2420; --gray:#8A817A; --line:#EFE6DC; --soft:#FFFBF7;
+    --primary:#FF6B4A; --primary-dark:#E5512F; --green:#1FA37A; --yellow:#E8A33D; --red:#E5604D;
+    --radius:20px; --shadow:0 12px 44px rgba(120,80,50,.10);
+    font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  .btn{display:inline-block;background:var(--primary);color:#fff;border:none;padding:16px 28px;
+    border-radius:999px;font-size:16px;font-weight:700;cursor:pointer;transition:.2s;white-space:nowrap;
+    box-shadow:0 8px 22px rgba(255,107,74,.34);text-decoration:none}
+  .btn:hover{background:var(--primary-dark);transform:translateY(-2px)}
+  .btn:disabled{opacity:.6;cursor:default;transform:none}
+  .pill{display:inline-block;background:#FFF0EB;color:var(--primary-dark);padding:5px 14px;
+    border-radius:999px;font-size:13px;font-weight:600;margin:3px}
+  .pill-green{display:inline-block;background:#E9F7F1;color:#147A57;padding:5px 14px;
+    border-radius:999px;font-size:13px;font-weight:600;margin:3px}
+
+  nav{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;justify-content:space-between;height:72px}
+  .logo{font-weight:800;font-size:21px;letter-spacing:-.5px}.logo span{color:var(--primary)}
+  nav .btn{padding:10px 22px;font-size:14px}
+
+  .hero{padding:72px 0 48px;text-align:center}
+  .hero .eyebrow{color:var(--primary);font-weight:700;font-size:15px;margin-bottom:14px}
+  .hero h1{font-size:clamp(28px,5vw,48px);font-weight:800;letter-spacing:-1.5px;line-height:1.28}
+  .hero h1 .hl{background:linear-gradient(transparent 58%,#FFD9A0 58%);padding:0 4px}
+  .hero p.lead{font-size:18px;color:var(--gray);margin:22px auto 0;max-width:600px}
+
+  .tool{margin:40px auto 0;max-width:760px;background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:32px;text-align:left}
+  .modes{display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap}
+  .mode-btn{flex:1;min-width:118px;padding:12px;border:1.5px solid var(--line);background:#fff;
+    border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;color:var(--gray);transition:.2s}
+  .mode-btn.active{border-color:var(--primary);color:var(--primary);background:#FFF6F3}
+  label{display:block;font-weight:700;font-size:14px;margin-bottom:8px}
+  .input-row{display:flex;gap:10px}
+  .input-row input{flex:1;padding:16px 18px;border:1.5px solid var(--line);border-radius:12px;
+    font-size:16px;outline:none;transition:.2s;background:var(--soft)}
+  .input-row input:focus{border-color:var(--primary);background:#fff}
+  .extra{margin-top:14px;display:none;grid-template-columns:1fr 1fr;gap:10px}
+  .extra.show{display:grid}
+  .extra input{padding:13px 16px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;outline:none;background:var(--soft)}
+  .current-box{margin-top:14px;display:none}.current-box.show{display:block}
+  .current-box input{width:100%;padding:13px 16px;border:1.5px dashed var(--line);border-radius:10px;font-size:14px;outline:none;background:var(--soft)}
+
+  .result{margin-top:26px;display:none;animation:fade .45s ease}.result.show{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+  .vs{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:stretch;margin-bottom:20px}
+  .vs-col{border-radius:16px;padding:18px}
+  .vs-old{background:#F7F2EC;border:1px solid var(--line)}
+  .vs-new{background:linear-gradient(135deg,#FFF1EC,#FFF9F6);border:1.5px solid var(--primary)}
+  .vs-col .tag{font-size:12px;font-weight:700;margin-bottom:8px}
+  .vs-old .tag{color:var(--gray)}.vs-new .tag{color:var(--primary-dark)}
+  .vs-col .txt{font-size:17px;font-weight:800;letter-spacing:-.4px;line-height:1.4}
+  .vs-old .txt{color:#9A8F84}
+  .vs-arrow{display:flex;align-items:center;font-size:24px;color:var(--primary)}
+  .vs-delta{font-size:12px;margin-top:10px;font-weight:700}.vs-up{color:var(--green)}
+  .copy-btn{margin-top:12px;background:var(--primary);color:#fff;border:none;padding:8px 16px;border-radius:9px;font-weight:700;font-size:13px;cursor:pointer}
+  .copy-btn:hover{background:var(--primary-dark)}
+
+  .track-btn{width:100%;margin:18px 0;padding:16px;border:none;border-radius:14px;background:var(--primary);
+    color:#fff;font-size:16px;font-weight:700;cursor:pointer;transition:.2s;display:flex;flex-direction:column;
+    align-items:center;gap:4px;box-shadow:0 8px 22px rgba(255,107,74,.30)}
+  .track-btn:hover:not(:disabled){background:var(--primary-dark);transform:translateY(-2px)}
+  .track-btn:disabled{cursor:default}
+  .track-btn.done{background:var(--green);box-shadow:none}
+  .track-hint{font-size:11px;font-weight:500;opacity:.8}
+
+  .gauge-box{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px;margin-bottom:18px}
+  .gauge-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+  .verdict{font-size:18px;font-weight:800}.gauge-score{font-size:13px;color:var(--gray)}
+  .gauge-track{height:12px;border-radius:99px;position:relative;background:linear-gradient(90deg,#1FA37A,#E8A33D,#E5604D)}
+  .gauge-needle{position:absolute;top:-5px;width:4px;height:22px;background:var(--ink);border-radius:2px;transform:translateX(-50%);transition:left .8s cubic-bezier(.2,.8,.2,1)}
+  .gauge-labels{display:flex;justify-content:space-between;font-size:11px;color:var(--gray);margin-top:8px}
+  .gauge-desc{font-size:13.5px;color:#5C534B;margin-top:14px;padding:12px 14px;background:var(--soft);border-radius:10px}
+  .opp-kw{margin-top:14px}.opp-label{font-size:12px;color:var(--gray);font-weight:700;margin-right:4px}
+
+  .meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .meta-box{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}
+  .meta-h4{font-size:13px;color:var(--gray);margin-bottom:12px;font-weight:700}
+  .kw-bar{margin-bottom:10px}
+  .kw-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
+  .kw-track{height:7px;background:var(--line);border-radius:99px;overflow:hidden}
+  .kw-fill{height:100%;background:linear-gradient(90deg,var(--primary),#FF9E85);border-radius:99px}
+  .total-vol{font-size:13px;color:var(--gray);margin-top:8px}.total-vol b{color:var(--primary);font-size:18px}
+  .reason{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:16px}
+  .reason ol{padding-left:18px;font-size:13.5px;color:#4A4240}.reason li{margin-bottom:5px}
+
+  .tracked-panel{margin-top:20px;padding:20px;background:var(--soft);border:1px solid var(--line);border-radius:16px}
+  .tracked-row{display:flex;justify-content:space-between;align-items:center;padding:14px;background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:10px}
+  .tracked-name{font-weight:700;font-size:15px;letter-spacing:-.3px}
+  .tracked-meta{font-size:12px;color:var(--gray);margin-top:4px}
+  .tracked-del{background:none;border:1px solid var(--line);color:var(--gray);padding:6px 14px;border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap}
+  .tracked-del:hover{border-color:var(--red);color:var(--red)}
+
+  @media(max-width:760px){.meta-grid,.vs{grid-template-columns:1fr}.vs-arrow{transform:rotate(90deg);justify-content:center}}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <div class="logo">셀러<span>랩스</span></div>
+  <a href="#tool" class="btn">무료로 시작하기</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <div class="eyebrow">⚡ 셀러랩스 상품명 추천기 (독립 데모)</div>
+  <h1>키워드만 넣으면 <span class="hl">상위노출 상품명</span>이 3초면 끝</h1>
+  <p class="lead">네이버 쇼핑 상위 40개를 분석해, 검색에 가장 잘 걸리는 상품명을 자동으로 만들어 드려요.</p>
+
+  <div class="tool" id="tool">
+    <div class="modes">
+      <button class="mode-btn active" data-mode="quick">⚡ 빠른 추천</button>
+      <button class="mode-btn" data-mode="complete">🎯 완벽 최적화</button>
+      <button class="mode-btn" data-mode="competition">📊 경쟁률 분석</button>
+    </div>
+
+    <label>상품 메인 키워드</label>
+    <div class="input-row">
+      <input id="kwInput" type="text" placeholder="예) 새우 ✗ / 신안 새우 ✓" value="대저토마토">
+      <button class="btn" id="genBtn">상품명 생성</button>
+    </div>
+
+    <div class="extra" id="extra">
+      <input id="brand" placeholder="브랜드 (선택)">
+      <input id="volume" placeholder="용량/수량 (선택, 예: 500g)">
+    </div>
+    <div class="current-box" id="currentBox">
+      <label style="margin-top:14px">현재 쓰고 있는 상품명 (비교용, 선택)</label>
+      <input id="currentName" placeholder="예) 토마토 방울토마토 맛있는 토마토 판매">
+    </div>
+
+    <div class="result" id="result"></div>
+    <div id="trackedListBox"></div>
+  </div>
+</div></header>
+
+<script>
+/* ===================== 데모 데이터 ===================== */
+const DEMO_DB = {
+  "대저토마토":{
+    category:"식품 > 농산물 > 과일 > 토마토",
+    keywords:[
+      {word:"부산",freq:12,volume:14800},{word:"방울토마토",freq:5,volume:18100},
+      {word:"고당도",freq:6,volume:8100},{word:"제철",freq:4,volume:9900},
+      {word:"짭짤이",freq:11,volume:3200},{word:"완숙",freq:8,volume:2900},
+      {word:"대추",freq:5,volume:5400},{word:"찰",freq:5,volume:1600},
+    ],
+    competition:{bundleRatio:0.0,avgReview:1.2,totalProducts:40,searchVolume:4680},
+    extraTags:["스테비아토마토","못난이토마토","흑토마토","산지직송","유럽종완숙"],
+    oppKeywords:["흑대추방울토마토","부산대저","짭짜리"]
+  },
+  "신안새우":{
+    category:"식품 > 수산물 > 새우",
+    keywords:[
+      {word:"대하",freq:10,volume:22000},{word:"생새우",freq:7,volume:9800},
+      {word:"냉동",freq:9,volume:6400},{word:"손질",freq:6,volume:4100},
+      {word:"흰다리새우",freq:5,volume:12000},{word:"자연산",freq:4,volume:3300},
+      {word:"국내산",freq:8,volume:7700},{word:"왕새우",freq:3,volume:5600},
+    ],
+    competition:{bundleRatio:0.45,avgReview:120,totalProducts:40,searchVolume:8200},
+    extraTags:["새우구이","대하소금구이","새우장","급속냉동","산지직송"],
+    oppKeywords:["신안대하","손질새우","자연산대하"]
+  }
+};
+
+/* ===================== 추천 엔진 ===================== */
+const normalize=a=>{if(!a.length)return[];const lo=Math.min(...a),hi=Math.max(...a);return hi===lo?a.map(()=>1):a.map(v=>(v-lo)/(hi-lo));};
+function scoreKeywords(k){const nf=normalize(k.map(x=>x.freq)),nv=normalize(k.map(x=>x.volume));return k.map((x,i)=>({...x,score:nf[i]*0.6+nv[i]*0.4})).sort((a,b)=>b.score-a.score);}
+function buildName(main,kws,ex={},maxW=7,maxL=50){
+  const r=scoreKeywords(kws),out=[],used=new Set();
+  if(ex.brand){out.push(ex.brand);used.add(ex.brand);}
+  main.split(" ").forEach(t=>{if(t&&!used.has(t)){out.push(t);used.add(t);}});
+  for(const k of r){if(out.length>=maxW)break;if(used.has(k.word))continue;
+    if([...used].some(u=>u.includes(k.word)||k.word.includes(u)))continue;
+    if([...out,k.word].join(" ").length>maxL)continue;out.push(k.word);used.add(k.word);}
+  if(ex.volume&&[...out,ex.volume].join(" ").length<=maxL)out.push(ex.volume);
+  return out.join(" ");
+}
+function calcDifficulty(c){
+  const reviewN=Math.min(c.avgReview/50,1);
+  const comp=(c.bundleRatio*0.4)+(reviewN*0.4)+0.2;
+  const raw=comp*100*(1-Math.min(c.searchVolume/20000,0.6));
+  return Math.round(Math.min(Math.max(raw,5),95));
+}
+function verdictOf(s){
+  if(s<35)return{label:"지금 들어가세요! 🟢",color:"var(--green)",desc:"상위노출 경쟁이 낮은 키워드예요. 상품명 최적화만 잘해도 광고 없이 순위가 올라갑니다."};
+  if(s<65)return{label:"해볼 만해요 🟡",color:"var(--yellow)",desc:"경쟁이 보통 수준이에요. 상품명 + 리뷰 관리를 병행하면 충분히 상위권 진입이 가능합니다."};
+  return{label:"경쟁이 셉니다 🔴",color:"var(--red)",desc:"이미 강한 셀러들이 자리잡은 키워드예요. 아래 기회 키워드로 우회하는 걸 추천드려요."};
+}
+
+/* ===================== 추적 저장소 (로컬 목업) ===================== */
+const STORE_KEY="sl_tracked_products";
+function getTracked(){try{return JSON.parse(localStorage.getItem(STORE_KEY)||"[]");}catch{return[];}}
+function isTracked(name){return getTracked().some(i=>i.productName===name);}
+async function registerTracking(item){
+  // TODO: 셀러랩스 순위추적 API 연결
+  await new Promise(r=>setTimeout(r,600));
+  const saved={...item,id:"local_"+Date.now(),createdAt:new Date().toISOString()};
+  const list=getTracked();list.unshift(saved);
+  localStorage.setItem(STORE_KEY,JSON.stringify(list));
+  return saved;
+}
+function removeTracking(id){localStorage.setItem(STORE_KEY,JSON.stringify(getTracked().filter(i=>i.id!==id)));}
+
+/* ===================== UI 제어 ===================== */
+let mode="quick";
+document.querySelectorAll('.mode-btn').forEach(b=>b.onclick=()=>{
+  mode=b.dataset.mode;
+  document.querySelectorAll('.mode-btn').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById('extra').classList.toggle('show',mode==='complete');
+  document.getElementById('currentBox').classList.toggle('show',mode==='complete');
+});
+document.getElementById('genBtn').onclick=generate;
+document.getElementById('kwInput').addEventListener('keydown',e=>{if(e.key==='Enter')generate();});
+
+function generate(){
+  const kw=document.getElementById('kwInput').value.trim();
+  if(!kw)return;
+  const db=DEMO_DB[kw.replace(/\s/g,'')]||DEMO_DB[kw]||DEMO_DB["대저토마토"];
+  const ex={brand:document.getElementById('brand').value.trim(),volume:document.getElementById('volume').value.trim()};
+  const name=buildName(kw,JSON.parse(JSON.stringify(db.keywords)),ex);
+  const used=name.split(" ");
+  const bars=db.keywords.filter(k=>used.includes(k.word));
+  const maxV=Math.max(...bars.map(b=>b.volume),1);
+  const total=bars.reduce((s,b)=>s+b.volume,0);
+  const diff=calcDifficulty(db.competition);
+  const v=verdictOf(diff);
+  const cur=document.getElementById('currentName').value.trim();
+  let html="";
+
+  if(mode==='complete'&&cur){
+    const curEst=Math.round(total*0.35);
+    html+=`<div class="vs">
+      <div class="vs-col vs-old"><div class="tag">현재 상품명</div><div class="txt">${esc(cur)}</div>
+        <div class="vs-delta">추정 노출 검색량 ${curEst.toLocaleString()}회</div></div>
+      <div class="vs-arrow">→</div>
+      <div class="vs-col vs-new"><div class="tag">추천 상품명</div><div class="txt">${esc(name)}</div>
+        <div class="vs-delta vs-up">▲ ${(total-curEst).toLocaleString()}회 상승 (${total.toLocaleString()}회)</div>
+        <button class="copy-btn" data-copy="${esc(name)}">복사하기</button></div></div>`;
+  }else{
+    html+=`<div class="vs-col vs-new" style="margin-bottom:20px"><div class="tag">추천 상품명</div>
+      <div class="txt">${esc(name)}</div>
+      <button class="copy-btn" data-copy="${esc(name)}">복사하기</button></div>`;
+  }
+
+  const already=isTracked(name);
+  html+=`<button class="track-btn ${already?'done':''}" id="trackBtn" ${already?'disabled':''}>
+    <span id="trackLabel">${already?'✓ 이미 추적 중':'📌 이 상품명으로 순위추적 등록하기'}</span>
+    <span class="track-hint">* 로컬 저장 (셀러랩스 미연동 데모)</span></button>`;
+
+  if(mode==='competition'||mode==='complete'){
+    html+=`<div class="gauge-box"><h4 class="meta-h4">📊 진입 난이도</h4>
+      <div class="gauge-head"><span class="verdict" style="color:${v.color}">${v.label}</span>
+        <span class="gauge-score">난이도 ${diff}/100</span></div>
+      <div class="gauge-track"><div class="gauge-needle" id="needle" style="left:0%"></div></div>
+      <div class="gauge-labels"><span>쉬움</span><span>보통</span><span>어려움</span></div>
+      <div class="gauge-desc">${v.desc}</div>
+      ${diff>=65?`<div class="opp-kw"><span class="opp-label">💡 기회 키워드 →</span>${db.oppKeywords.map(k=>`<span class="pill-green">${esc(k)}</span>`).join('')}</div>`:''}
+    </div>`;
+  }
+
+  html+=`<div class="meta-grid">
+    <div class="meta-box"><h4 class="meta-h4">📈 키워드별 검색량</h4>
+      ${bars.map(b=>`<div class="kw-bar"><div class="kw-top"><span>${esc(b.word)}</span><b>${b.volume.toLocaleString()}회</b></div>
+        <div class="kw-track"><div class="kw-fill" style="width:${b.volume/maxV*100}%"></div></div></div>`).join('')}
+      <div class="total-vol">총 노출 검색량 <b>${total.toLocaleString()}회</b></div></div>
+    <div class="meta-box"><h4 class="meta-h4">🗂 추천 카테고리</h4><span class="pill">${esc(db.category)}</span>
+      <h4 class="meta-h4" style="margin-top:16px">🏷 추천 태그</h4>
+      ${[...db.extraTags,...db.keywords.filter(k=>!used.includes(k.word)).map(k=>k.word)].slice(0,10).map(t=>`<span class="pill">${esc(t)}</span>`).join('')}</div>
+  </div>`;
+
+  if(mode!=='quick'){
+    html+=`<div class="reason"><h4 class="meta-h4">💡 왜 이 상품명일까요?</h4><ol>
+      ${[`필수 키워드 "${esc(kw)}" 포함`,`상위노출 빈도 1위 키워드 우선 배치`,`검색량 최상위 키워드 결합으로 노출 확대`,
+        `동일 단어 비연속 배치로 SEO 패널티 회피`,`${used.length}개 단어 사용 (네이버 권장 7개 내외)`,
+        `특수문자 0개 · 50자 이내 준수`].map(r=>`<li>${r}</li>`).join('')}</ol></div>`;
+  }
+
+  const res=document.getElementById('result');
+  res.innerHTML=html;res.classList.add('show');
+
+  res.querySelectorAll('.copy-btn').forEach(btn=>btn.onclick=()=>{
+    navigator.clipboard.writeText(btn.dataset.copy);
+    const o=btn.textContent;btn.textContent='복사됨 ✓';setTimeout(()=>btn.textContent=o,1500);
+  });
+  const tBtn=document.getElementById('trackBtn');
+  tBtn.onclick=async()=>{
+    if(tBtn.disabled)return;
+    tBtn.disabled=true;document.getElementById('trackLabel').textContent='등록 중…';
+    await registerTracking({productName:name,mainKeyword:kw,category:db.category,totalVolume:total,difficulty:diff});
+    tBtn.classList.add('done');document.getElementById('trackLabel').textContent='✓ 등록 완료!';
+    setTimeout(()=>{document.getElementById('trackLabel').textContent='✓ 이미 추적 중';},1800);
+    renderTracked();
+  };
+
+  const needle=document.getElementById('needle');
+  if(needle)setTimeout(()=>needle.style.left=diff+'%',50);
+
+  renderTracked();
+  res.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function renderTracked(){
+  const items=getTracked();const box=document.getElementById('trackedListBox');
+  if(!items.length){box.innerHTML="";return;}
+  box.innerHTML=`<div class="tracked-panel"><h4 class="meta-h4">📋 내 추적 목록 (${items.length})</h4>
+    ${items.map(it=>`<div class="tracked-row">
+      <div><div class="tracked-name">${esc(it.productName)}</div>
+        <div class="tracked-meta">검색량 ${it.totalVolume.toLocaleString()}회 · 난이도 ${it.difficulty} · ${new Date(it.createdAt).toLocaleDateString('ko-KR')}</div></div>
+      <button class="tracked-del" data-id="${it.id}">삭제</button></div>`).join('')}</div>`;
+  box.querySelectorAll('.tracked-del').forEach(b=>b.onclick=()=>{removeTracking(b.dataset.id);renderTracked();
+    const tBtn=document.getElementById('trackBtn');if(tBtn){tBtn.disabled=false;tBtn.classList.remove('done');
+      const lbl=document.getElementById('trackLabel');if(lbl)lbl.textContent='📌 이 상품명으로 순위추적 등록하기';}});
+}
+
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+renderTracked();
+generate();
+</script>
+</body>
+</html>

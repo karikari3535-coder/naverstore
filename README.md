@@ -1,85 +1,182 @@
-# 스마트스토어 자가진단 (SmartStore Self-Diagnosis)
+# 셀러랩스 상품명 추천기 (Product Name Recommender)
 
-네이버 **스마트스토어 상품 최적화 자가진단** 프로그램. 네이버플레이스 자가진단(naverplace)을 참고해 동일한 형태(3단계 SPA + 점수/등급 리포트)로 제작했습니다.
+네이버 쇼핑 상위 40개를 분석해, 검색에 최적화된 상품명을
+자동 생성하는 도구입니다. 키워드 입력 → 상품명 추천 →
+진입난이도 분석 → 순위추적 등록까지 한 흐름으로 동작합니다.
 
-## 프로젝트 개요
-- **목표**: 스마트스토어 상품의 검색 노출 최적화 상태를 점검하고 100점 만점 점수·등급·개선 가이드 제공
-- **방식**: **하이브리드** — 공개 페이지 자동 수집(시도) + 직접 입력 + 관리자 항목 체크리스트
-- **기술 스택**: Hono + Vite + Cloudflare Pages + Pretendard/FontAwesome (CDN)
+> ⚠️ 현재 셀러랩스 서버와는 연동되지 않은 **독립 프로토타입**입니다.
+> 실제 연동 지점은 코드 내 `// TODO` 주석으로 표시돼 있습니다.
 
-## ⚠️ 중요: 자동수집 제약 (실측 검증 완료)
-- 네이버플레이스와 달리 **스마트스토어/쇼핑은 서버사이드 자동수집을 강하게 차단**합니다.
-  - 실측 결과: HTTP **429**(Too Many Requests) 또는 **네이버 로그인 셸 페이지** 반환
-  - Cloudflare Workers 데이터센터 IP에서도 동일하게 차단됨
-- 따라서 본 프로그램은 차단을 **자동 감지**하여 **"직접 입력 모드"**로 전환합니다.
-  - 상품명 글자수·이미지 수·리뷰 수·별점을 사용자가 직접 입력 → 그 항목도 자동 채점
-  - 나머지(관리자에만 있는 항목)는 체크리스트로 진단
+---
 
-## 현재 구현된 기능
-1. **Stage 1 — URL 입력**: 스마트스토어 상품 URL 입력 또는 URL 없이 체크리스트만 진단
-2. **Stage 2 — 자동수집/직접입력 + 체크리스트**:
-   - 공개 페이지 자동 수집 시도 → 성공 시 `자동` 배지, 차단 시 `직접 입력 모드`로 전환
-   - 직접 입력 항목(주황 칸): 상품명 글자수·이미지 수·리뷰 수·별점
-   - 나머지는 체크리스트 응답(라디오 선택)
-3. **Stage 3 — 리포트**: 총점·등급(S/A/B/C/D), **랭킹 3대 축 카드**, 영역별 점수, 개선 우선순위 TOP5, PDF 저장
+## 📦 구성
 
-## 진단 항목 체계 — 네이버 쇼핑검색 랭킹 3대 축 (10개 영역 · 21개 항목 · 100점)
+이 프로젝트는 두 가지 형태로 제공됩니다.
 
-> **랭킹 = 적합도 × 인기도 × 신뢰도** (네이버 쇼핑검색 랭킹 구성 요소를 그대로 반영)
+| | 용도 | 위치 | 실행 |
+|---|---|---|---|
+| **데모** | 시연·체험용 단일 파일 | `demo.html` | 더블클릭 |
+| **제품** | 실제 배포용 Next.js | `production/` | `npm run dev` |
 
-### ① 적합도 (relevance) — 40점 · 검색 의도에 적합한 상품
-| 영역 | 배점 | 주요 항목 |
-|------|------|-----------|
-| 상품명 | 11 | 상품명 길이(자동), 대표 키워드 배치 |
-| 카테고리 | 11 | 카테고리 정확도, 하위(세부) 카테고리 |
-| 제조사·브랜드 | 7 | 브랜드·제조사 입력, 모델명 고유성 |
-| 속성·태그 | 11 | 상품속성 채움, 태그 10개 |
+- `demo.html` — 설치 없이 브라우저에서 바로 실행됩니다.
+  더미 데이터(`DEMO_DB`)로 모든 UI·로직을 체험할 수 있습니다.
+- `production/` — 셀러랩스 컨벤션(App Router + CSS Modules)에
+  맞춘 실제 제품 코드입니다. 네이버 API 연동·테스트를 포함합니다.
 
-### ② 인기도 (popularity) — 38점 · 많이 찾고 팔리는 상품
-| 영역 | 배점 | 주요 항목 |
-|------|------|-----------|
-| 클릭수·찜수 | 11 | 대표 이미지 클릭 유도력, 찜(관심고객) 수 |
-| 판매실적 | 6 | 판매 실적(누적/최근) |
-| 리뷰수 | 13 | 리뷰 수(자동), 평균 별점(자동), 리뷰 포인트 |
-| 최신성 | 8 | 신상품 가점(등록), 정보 최신 관리 |
+---
 
-### ③ 신뢰도 (reliability) — 22점 · 신뢰할 수 있는 정보의 상품
-| 영역 | 배점 | 주요 항목 |
-|------|------|-----------|
-| 상품명 SEO | 17 | SEO 규칙 준수, 이미지 품질·구성(자동), 상품정보제공고시 |
-| 네이버쇼핑 페널티 | 6 | 어뷰징/페널티 요인 없음, 운영 신뢰도(배송·CS) |
+## 🚀 빠른 시작
 
-## 기능 진입 URI (API)
-| 메서드 | 경로 | 파라미터 | 설명 |
-|--------|------|----------|------|
-| `GET` | `/` | - | 메인 3단계 SPA |
-| `GET` | `/api/store` | `url` (쿼리) | 공개 페이지 자동수집 결과(JSON) |
-| `GET` | `/api/criteria` | - | 진단 항목 정의(JSON) |
-| `POST` | `/api/diagnose` | body: `{ store?, url?, answers }` | 통합 진단 결과(JSON) |
+### 1) 데모만 보고 싶다면
+```
+demo.html 파일을 더블클릭 → 브라우저에서 바로 작동
+```
+별도 설치가 필요 없습니다. "대저토마토", "신안새우" 두 키워드가 샘플로 준비돼 있습니다.
 
-## 데이터 구조
-- **StoreData** (자동수집): productId, name, nameLength, category, price, imageCount, reviewCount, starRating, collected[]
-- **DiagnoseResult** (진단결과): totalScore, grade, groups[], topImprovements[]
-- **저장소**: 없음 (Stateless) — 진단 즉시 처리 후 폐기
+### 2) 제품 코드를 실행하려면
+```bash
+cd production
+npm install
+cp .env.local.example .env.local   # 네이버 API 키 입력
+npm run dev                          # http://localhost:3000
+```
 
-## 사용 방법
-1. 스마트스토어 상품 URL을 붙여넣고 `진단 시작`
-2. 자동 수집된 정보 확인 → 관리자에서만 보이는 항목 체크
-3. `결과 보기`로 점수·등급·개선 우선순위 확인, 필요 시 PDF 저장
+### 3) 네이버 API 연결만 먼저 확인하려면
+```bash
+cd production
+npm run test:naver   # 검색광고/쇼핑 API 키가 살아있는지 단독 확인
+```
 
-## 미구현 / 다음 단계
-- [ ] 카테고리별 진단 가중치 (의류/식품/전자 등 업종별 차등)
-- [ ] 키워드 분석 도구 (상품명에서 키워드 추출/검증)
-- [ ] 결과 공유 링크 / 이미지 저장
-- [ ] PDF 디자인 개선 (html2pdf 적용)
-- [ ] (선택) 네이버 검색광고 API 등 공식 API 연동 검토
-  - 자동수집이 차단되므로, 정확도를 높이려면 공식 API/OAuth 경로가 필요
+---
 
-## 배포
-- **플랫폼**: Cloudflare Pages
-- **상태**: 🚧 로컬 개발 중 (sandbox)
-- **개발 서버**: PM2 + `wrangler pages dev` (port 3000)
-- **최종 수정**: 2026-06-16
+## 🔑 환경변수 (네이버 API)
 
-## ⚠️ 주의
-본 진단은 네이버 공식 점수가 아니라 공개 자료(블로그·콘텐츠) 기반의 최적화 가이드입니다. 자동 크롤링은 네이버 페이지 구조 변경 시 동작이 달라질 수 있습니다.
+`production/.env.local`에 아래 값을 채웁니다.
+키 발급은 셀러랩스가 아닌 본인(회사) 명의로 받습니다.
+
+```bash
+# (A) 네이버 검색광고 API (검색량) — searchad.naver.com
+NAVER_API_KEY=
+NAVER_SECRET_KEY=
+NAVER_CUSTOMER_ID=
+
+# (B) 네이버 쇼핑 검색 API (상위 40개) — developers.naver.com
+#     ※ 사이트 URL 이 있어야 발급 가능 → 배포 후 도메인 나오면 채우기
+NAVER_SHOP_ID=
+NAVER_SHOP_SECRET=
+```
+
+| 키 | 발급처 | 비고 |
+|---|---|---|
+| `NAVER_API_KEY` / `NAVER_SECRET_KEY` / `NAVER_CUSTOMER_ID` | searchad.naver.com → 도구 → API 사용 관리 | 즉시 발급, HMAC 서명용 |
+| `NAVER_SHOP_ID` / `NAVER_SHOP_SECRET` | developers.naver.com → 앱 등록 (사용 API "검색" 체크) | **사이트 URL 필요** · 하루 25,000회 |
+
+---
+
+## 🧩 핵심 흐름
+
+```
+키워드 입력
+  → [engine.ts] 빈도60% + 검색량40% 점수화
+  → 상품명 조립 (7단어/50자 이내, 중복·포함관계 제거)
+  → [route.ts] 네이버 API로 실제 검색량·카테고리 분석
+  → 진입난이도 게이지 + 현재vs추천 비교 표시
+  → [trackingStore.ts] 순위추적 등록 (현재 localStorage)
+  → 내 추적 목록에서 확인
+```
+
+---
+
+## 📂 주요 파일 안내
+
+### 로직 (순수 함수 — 테스트 가능)
+| 파일 | 역할 |
+|---|---|
+| `production/src/lib/recommender/engine.ts` | 점수화·상품명 조립·난이도 계산 |
+| `production/src/lib/recommender/naverSearchAd.ts` | 네이버 API 클라이언트 + 카테고리/빈도 추출 |
+| `production/src/lib/recommender/trackingStore.ts` | 추적 저장소 (목업) |
+
+### UI 컴포넌트
+| 파일 | 역할 |
+|---|---|
+| `ProductRecommender.tsx` | 메인 컨테이너 (상태 관리) |
+| `ModeTabs.tsx` | 빠른/완벽/경쟁률 모드 전환 |
+| `ResultCard.tsx` | 결과 카드 조립 |
+| `DifficultyGauge.tsx` | 진입난이도 게이지 |
+| `VersusCompare.tsx` | 현재 vs 추천 비교 |
+| `TrackButton.tsx` | 순위추적 등록 버튼 |
+| `TrackedList.tsx` | 내 추적 목록 |
+
+### API (서버)
+| 파일 | 역할 |
+|---|---|
+| `production/src/app/api/analyze/route.ts` | `/api/analyze?kw=` 핸들러 |
+
+---
+
+## 🧪 테스트
+
+```bash
+cd production
+npm test            # 전체 실행
+npm run test:cov    # 커버리지 포함
+npm run test:watch  # 워치 모드
+```
+
+| 테스트 | 대상 |
+|---|---|
+| `scoreKeywords.test.ts` | 점수화·정렬·불변성 |
+| `buildProductName.test.ts` | 상품명 조립 (골든 테스트 포함) |
+| `difficulty.test.ts` | 난이도 계산·판정 경계값 |
+| `trackingStore.test.ts` | 로컬 등록·삭제 |
+| `route.test.ts` | API 정상 경로 (MSW) |
+| `route.error.test.ts` | API 예외 경로 (MSW) |
+| `route.spy.test.ts` | spyOn 방식 대안 |
+
+> 골든 테스트의 기대 문자열은 실제 출력으로 한 번 맞춰 고정되어 있습니다.
+
+---
+
+## 🔌 실제 연동 시 교체 지점 (3곳)
+
+현재는 독립 동작합니다. 실서비스 전환 시 아래만 바꿉니다.
+
+1. **검색 데이터** — `demo.html`의 `DEMO_DB` → `route.ts`의 네이버 API 호출로 (제품 코드엔 이미 구현됨)
+2. **순위추적 등록** — `trackingStore.ts`의 `registerTracking` 내부 `// TODO` 자리를 셀러랩스 API `fetch`로 교체
+3. **카테고리 산출** — `route.ts`에서 `extractCategory()`로 자동 산출됨 (쇼핑 API `category1~4` 활용, 구현 완료)
+
+---
+
+## 🎨 디자인 토큰
+
+셀러랩스 실제 톤 기준 (웜 크림 베이스). `production/src/app/globals.css` 에 정의.
+
+| 토큰 | 값 | 용도 |
+|---|---|---|
+| `--sl-bg` | `#FDF6F0` | 배경 (웜 크림) |
+| `--sl-ink` | `#2A2420` | 본문 (따뜻한 차콜) |
+| `--sl-primary` | `#FF6B4A` | CTA·포인트 (코랄) |
+| `--sl-green` | `#1FA37A` | 기회 (난이도 낮음) |
+| `--sl-yellow` | `#E8A33D` | 보통 |
+| `--sl-red` | `#E5604D` | 경쟁 심함 |
+
+> 코랄(`#FF6B4A`)은 헤더 톤 추정값입니다. 실제 로고 SVG의 정확한 HEX로 교체 권장.
+
+---
+
+## 📌 현재 상태 / 다음 단계
+
+- [x] 추천 엔진 + UI 완성
+- [x] 진입난이도 게이지 / 현재vs추천 비교
+- [x] 순위추적 로컬 등록 (목업)
+- [x] 단위·통합 테스트
+- [x] 카테고리 자동 산출 (쇼핑 API category 필드)
+- [ ] 네이버 쇼핑 API 키 발급 → 실데이터 연결 (사이트 URL 필요)
+- [ ] 셀러랩스 순위추적 실연동
+- [ ] CI(GitHub Actions) 파이프라인
+
+---
+
+## 📝 라이선스 / 비고
+
+내부 프로토타입. 외부 배포 전 셀러랩스 팀과 API·디자인 토큰·연동 범위를 협의하세요.
