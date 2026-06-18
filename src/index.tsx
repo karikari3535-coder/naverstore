@@ -100,10 +100,13 @@ app.get('/api/analyze', async (c) => {
       .slice(0, 10)
 
     // 추천 상품명에 실제 사용된 키워드들의 검색량 합 (= 총 노출 검색량)
+    // 메인 키워드는 추천명 맨 앞에 항상 포함되므로, 분리 단어 배열이 아니라
+    // 추천명 문자열에 포함되는지로 판단(두 단어 이상 키워드도 정확히 합산).
+    const mainUsed = name.includes(kw)
     const usedVolume = ranked
-      .filter(k => usedWords.includes(k.word))
+      .filter(k => usedWords.includes(k.word) && k.word !== kw)
       .reduce((s, k) => s + (k.volume || 0), 0)
-      + (usedWords.includes(kw) ? (mainSearchVolume || 0) : 0)
+      + (mainUsed ? (mainSearchVolume || 0) : 0)
 
     // 길이 분포 & 주요정보
     const lengthDist = nameLengthDistribution(shop.items)
