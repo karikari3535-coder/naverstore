@@ -24,6 +24,13 @@
     border-radius:999px;font-size:13px;font-weight:600;margin:3px}
   .pill-green{display:inline-block;background:#E9F7F1;color:#147A57;padding:5px 14px;
     border-radius:999px;font-size:13px;font-weight:600;margin:3px}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;margin-left:6px;vertical-align:middle}
+  .badge-live{background:#E9F7F1;color:#147A57}
+  .badge-demo{background:#FFF0EB;color:var(--primary-dark)}
+  .loading{display:flex;align-items:center;justify-content:center;gap:10px;padding:30px;color:var(--gray);font-weight:600}
+  .spinner{width:18px;height:18px;border:2.5px solid var(--line);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .err-box{padding:16px 18px;background:#FDECEA;border:1px solid #F5C6C0;border-radius:12px;color:#B03A2E;font-size:14px;font-weight:600;margin-top:20px}
 
   nav{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--line)}
   nav .wrap{display:flex;align-items:center;justify-content:space-between;height:72px}
@@ -114,7 +121,7 @@
 </div></nav>
 
 <header class="hero"><div class="wrap">
-  <div class="eyebrow">⚡ 셀러랩스 상품명 추천기 (독립 데모)</div>
+  <div class="eyebrow">⚡ 셀러랩스 상품명 추천기 <span id="modeBadge"></span></div>
   <h1>키워드만 넣으면 <span class="hl">상위노출 상품명</span>이 3초면 끝</h1>
   <p class="lead">네이버 쇼핑 상위 40개를 분석해, 검색에 가장 잘 걸리는 상품명을 자동으로 만들어 드려요.</p>
 
@@ -213,6 +220,56 @@ async function registerTracking(item){
 }
 function removeTracking(id){localStorage.setItem(STORE_KEY,JSON.stringify(getTracked().filter(i=>i.id!==id)));}
 
+/* ===================== 실데이터 모드 ===================== */
+let LIVE=false; // 서버에 네이버 키가 있으면 true
+async function detectMode(){
+  try{
+    const r=await fetch('/api/status');
+    if(r.ok){const j=await r.json();LIVE=!!j.liveData;}
+  }catch{LIVE=false;}
+  const badge=document.getElementById('modeBadge');
+  if(badge){
+    badge.className='badge '+(LIVE?'badge-live':'badge-demo');
+    badge.textContent=LIVE?'🟢 실데이터 (네이버 쇼핑)':'🟡 데모 데이터';
+  }
+}
+
+/* 더미 DEMO_DB → 공통 렌더 데이터 형태로 변환 */
+function fromDemo(kw){
+  const db=DEMO_DB[kw.replace(/\s/g,'')]||DEMO_DB[kw]||DEMO_DB["대저토마토"];
+  return {
+    keywords:db.keywords.map(k=>({word:k.word,freq:k.freq,volume:k.volume})),
+    category:db.category,
+    difficulty:calcDifficulty(db.competition),
+    extraTags:db.extraTags,
+    oppKeywords:db.oppKeywords,
+    hasVolume:true,
+    live:false
+  };
+}
+
+/* 실서버 /api/analyze → 공통 렌더 데이터 형태로 변환 */
+async function fromApi(kw,ex){
+  const q=new URLSearchParams({kw});
+  if(ex.brand)q.set('brand',ex.brand);
+  if(ex.volume)q.set('volume',ex.volume);
+  const r=await fetch('/api/analyze?'+q.toString());
+  const j=await r.json();
+  if(!r.ok)throw new Error(j.detail||j.error||('HTTP '+r.status));
+  return {
+    keywords:j.keywords.map(k=>({word:k.word,freq:k.freq,volume:0})), // 검색량 API 미연동 → 빈도 기반
+    category:j.category||'(카테고리 정보 없음)',
+    difficulty:j.difficulty,
+    extraTags:j.tags||[],
+    oppKeywords:[],
+    sampleTitles:j.sampleTitles||[],
+    totalProducts:j.totalProducts,
+    serverName:j.recommendedName,
+    hasVolume:false,
+    live:true
+  };
+}
+
 /* ===================== UI 제어 ===================== */
 let mode="quick";
 document.querySelectorAll('.mode-btn').forEach(b=>b.onclick=()=>{
@@ -225,29 +282,61 @@ document.querySelectorAll('.mode-btn').forEach(b=>b.onclick=()=>{
 document.getElementById('genBtn').onclick=generate;
 document.getElementById('kwInput').addEventListener('keydown',e=>{if(e.key==='Enter')generate();});
 
-function generate(){
+async function generate(){
   const kw=document.getElementById('kwInput').value.trim();
   if(!kw)return;
-  const db=DEMO_DB[kw.replace(/\s/g,'')]||DEMO_DB[kw]||DEMO_DB["대저토마토"];
   const ex={brand:document.getElementById('brand').value.trim(),volume:document.getElementById('volume').value.trim()};
-  const name=buildName(kw,JSON.parse(JSON.stringify(db.keywords)),ex);
+  const res=document.getElementById('result');
+  const genBtn=document.getElementById('genBtn');
+
+  // 데이터 획득 (실데이터 우선, 실패 시 더미 fallback)
+  let data;
+  if(LIVE){
+    res.classList.add('show');
+    res.innerHTML='<div class="loading"><span class="spinner"></span>네이버 쇼핑 상위 40개 분석 중…</div>';
+    genBtn.disabled=true;
+    try{
+      data=await fromApi(kw,ex);
+    }catch(e){
+      // 실패하면 데모로 폴백하되 안내
+      data=fromDemo(kw);
+      data._fallbackMsg='실데이터 조회 실패('+e.message+') → 데모 데이터로 표시합니다.';
+    }
+    genBtn.disabled=false;
+  }else{
+    data=fromDemo(kw);
+  }
+
+  render(kw,ex,data);
+}
+
+function render(kw,ex,db){
+  const name=db.serverName||buildName(kw,JSON.parse(JSON.stringify(db.keywords)),ex);
   const used=name.split(" ");
   const bars=db.keywords.filter(k=>used.includes(k.word));
-  const maxV=Math.max(...bars.map(b=>b.volume),1);
-  const total=bars.reduce((s,b)=>s+b.volume,0);
-  const diff=calcDifficulty(db.competition);
+  const maxV=Math.max(...bars.map(b=>b.volume||b.freq),1);
+  const total=db.hasVolume?bars.reduce((s,b)=>s+(b.volume||0),0):0;
+  const diff=db.difficulty;
   const v=verdictOf(diff);
   const cur=document.getElementById('currentName').value.trim();
   let html="";
+  if(db._fallbackMsg)html+=`<div class="err-box">⚠️ ${esc(db._fallbackMsg)}</div>`;
 
   if(mode==='complete'&&cur){
-    const curEst=Math.round(total*0.35);
+    const curUsed=cur.split(/\s+/);
+    const curMatch=db.keywords.filter(k=>curUsed.includes(k.word)).length;
+    const deltaTxt=db.hasVolume
+      ? `▲ ${(total-Math.round(total*0.35)).toLocaleString()}회 상승 (${total.toLocaleString()}회)`
+      : `▲ 상위노출 키워드 ${bars.length}개 반영 (현재 ${curMatch}개)`;
+    const oldTxt=db.hasVolume
+      ? `추정 노출 검색량 ${Math.round(total*0.35).toLocaleString()}회`
+      : `상위노출 키워드 ${curMatch}개 포함`;
     html+=`<div class="vs">
       <div class="vs-col vs-old"><div class="tag">현재 상품명</div><div class="txt">${esc(cur)}</div>
-        <div class="vs-delta">추정 노출 검색량 ${curEst.toLocaleString()}회</div></div>
+        <div class="vs-delta">${oldTxt}</div></div>
       <div class="vs-arrow">→</div>
       <div class="vs-col vs-new"><div class="tag">추천 상품명</div><div class="txt">${esc(name)}</div>
-        <div class="vs-delta vs-up">▲ ${(total-curEst).toLocaleString()}회 상승 (${total.toLocaleString()}회)</div>
+        <div class="vs-delta vs-up">${deltaTxt}</div>
         <button class="copy-btn" data-copy="${esc(name)}">복사하기</button></div></div>`;
   }else{
     html+=`<div class="vs-col vs-new" style="margin-bottom:20px"><div class="tag">추천 상품명</div>
@@ -258,7 +347,7 @@ function generate(){
   const already=isTracked(name);
   html+=`<button class="track-btn ${already?'done':''}" id="trackBtn" ${already?'disabled':''}>
     <span id="trackLabel">${already?'✓ 이미 추적 중':'📌 이 상품명으로 순위추적 등록하기'}</span>
-    <span class="track-hint">* 로컬 저장 (셀러랩스 미연동 데모)</span></button>`;
+    <span class="track-hint">* 로컬 저장 (셀러랩스 순위추적 미연동)</span></button>`;
 
   if(mode==='competition'||mode==='complete'){
     html+=`<div class="gauge-box"><h4 class="meta-h4">📊 진입 난이도</h4>
@@ -271,21 +360,35 @@ function generate(){
     </div>`;
   }
 
+  const barTitle=db.hasVolume?'📈 키워드별 검색량':'📈 상위 40개 등장 빈도';
+  const totalLine=db.hasVolume
+    ? `총 노출 검색량 <b>${total.toLocaleString()}회</b>`
+    : (db.totalProducts!=null?`네이버 쇼핑 전체 상품 <b>${db.totalProducts.toLocaleString()}개</b>`:'');
   html+=`<div class="meta-grid">
-    <div class="meta-box"><h4 class="meta-h4">📈 키워드별 검색량</h4>
-      ${bars.map(b=>`<div class="kw-bar"><div class="kw-top"><span>${esc(b.word)}</span><b>${b.volume.toLocaleString()}회</b></div>
-        <div class="kw-track"><div class="kw-fill" style="width:${b.volume/maxV*100}%"></div></div></div>`).join('')}
-      <div class="total-vol">총 노출 검색량 <b>${total.toLocaleString()}회</b></div></div>
+    <div class="meta-box"><h4 class="meta-h4">${barTitle}</h4>
+      ${bars.map(b=>{const val=db.hasVolume?b.volume:b.freq;const unit=db.hasVolume?'회':'개 상품';
+        return `<div class="kw-bar"><div class="kw-top"><span>${esc(b.word)}</span><b>${val.toLocaleString()}${unit}</b></div>
+        <div class="kw-track"><div class="kw-fill" style="width:${val/maxV*100}%"></div></div></div>`;}).join('')}
+      <div class="total-vol">${totalLine}</div></div>
     <div class="meta-box"><h4 class="meta-h4">🗂 추천 카테고리</h4><span class="pill">${esc(db.category)}</span>
       <h4 class="meta-h4" style="margin-top:16px">🏷 추천 태그</h4>
       ${[...db.extraTags,...db.keywords.filter(k=>!used.includes(k.word)).map(k=>k.word)].slice(0,10).map(t=>`<span class="pill">${esc(t)}</span>`).join('')}</div>
   </div>`;
 
+  if(db.live&&db.sampleTitles&&db.sampleTitles.length){
+    html+=`<div class="reason"><h4 class="meta-h4">🔎 분석한 상위 상품명 (샘플)</h4><ol>
+      ${db.sampleTitles.map(t=>`<li>${esc(t)}</li>`).join('')}</ol></div>`;
+  }
+
   if(mode!=='quick'){
+    const reasons=db.hasVolume
+      ? [`필수 키워드 "${esc(kw)}" 포함`,`상위노출 빈도 1위 키워드 우선 배치`,`검색량 최상위 키워드 결합으로 노출 확대`,
+         `동일 단어 비연속 배치로 SEO 패널티 회피`,`${used.length}개 단어 사용 (네이버 권장 7개 내외)`,`특수문자 0개 · 50자 이내 준수`]
+      : [`필수 키워드 "${esc(kw)}" 포함`,`네이버 쇼핑 상위 40개에서 가장 자주 쓰인 키워드 우선 배치`,
+         `상위 셀러들이 공통으로 쓰는 세부 키워드 결합`,`동일 단어 비연속 배치로 SEO 패널티 회피`,
+         `${used.length}개 단어 사용 (네이버 권장 7개 내외)`,`특수문자 0개 · 50자 이내 준수`];
     html+=`<div class="reason"><h4 class="meta-h4">💡 왜 이 상품명일까요?</h4><ol>
-      ${[`필수 키워드 "${esc(kw)}" 포함`,`상위노출 빈도 1위 키워드 우선 배치`,`검색량 최상위 키워드 결합으로 노출 확대`,
-        `동일 단어 비연속 배치로 SEO 패널티 회피`,`${used.length}개 단어 사용 (네이버 권장 7개 내외)`,
-        `특수문자 0개 · 50자 이내 준수`].map(r=>`<li>${r}</li>`).join('')}</ol></div>`;
+      ${reasons.map(r=>`<li>${r}</li>`).join('')}</ol></div>`;
   }
 
   const res=document.getElementById('result');
@@ -316,10 +419,11 @@ function renderTracked(){
   const items=getTracked();const box=document.getElementById('trackedListBox');
   if(!items.length){box.innerHTML="";return;}
   box.innerHTML=`<div class="tracked-panel"><h4 class="meta-h4">📋 내 추적 목록 (${items.length})</h4>
-    ${items.map(it=>`<div class="tracked-row">
+    ${items.map(it=>{const volTxt=it.totalVolume>0?`검색량 ${it.totalVolume.toLocaleString()}회 · `:'';
+      return `<div class="tracked-row">
       <div><div class="tracked-name">${esc(it.productName)}</div>
-        <div class="tracked-meta">검색량 ${it.totalVolume.toLocaleString()}회 · 난이도 ${it.difficulty} · ${new Date(it.createdAt).toLocaleDateString('ko-KR')}</div></div>
-      <button class="tracked-del" data-id="${it.id}">삭제</button></div>`).join('')}</div>`;
+        <div class="tracked-meta">${volTxt}난이도 ${it.difficulty} · ${new Date(it.createdAt).toLocaleDateString('ko-KR')}</div></div>
+      <button class="tracked-del" data-id="${it.id}">삭제</button></div>`;}).join('')}</div>`;
   box.querySelectorAll('.tracked-del').forEach(b=>b.onclick=()=>{removeTracking(b.dataset.id);renderTracked();
     const tBtn=document.getElementById('trackBtn');if(tBtn){tBtn.disabled=false;tBtn.classList.remove('done');
       const lbl=document.getElementById('trackLabel');if(lbl)lbl.textContent='📌 이 상품명으로 순위추적 등록하기';}});
@@ -328,7 +432,7 @@ function renderTracked(){
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
 renderTracked();
-generate();
+detectMode().then(generate);
 </script>
 </body>
 </html>

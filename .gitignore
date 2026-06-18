@@ -31,3 +31,6 @@ lerna-debug.log*
 
 # misc
 .DS_Store
+
+# 네이버 API 키가 포함된 배포 설정 (커밋 금지)
+wrangler.jsonc
