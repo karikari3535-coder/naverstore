@@ -6,11 +6,15 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  // 네이버 쇼핑 검색 API 키 (developers.naver.com)
   // 실제 키를 채운 뒤 이 파일을 wrangler.jsonc 로 복사해서 배포하세요.
   // wrangler.jsonc 는 .gitignore에 포함되어 git에 올라가지 않습니다.
   "vars": {
+    // 네이버 쇼핑 검색 API (developers.naver.com)
     "NAVER_SHOP_ID": "여기에-Client-ID",
-    "NAVER_SHOP_SECRET": "여기에-Client-Secret"
+    "NAVER_SHOP_SECRET": "여기에-Client-Secret",
+    // 네이버 검색광고 API (searchad.naver.com) — 키워드 검색량 조회용
+    "NAVER_AD_API_KEY": "여기에-액세스라이선스",
+    "NAVER_AD_SECRET_KEY": "여기에-비밀키",
+    "NAVER_AD_CUSTOMER_ID": "여기에-CUSTOMER-ID-숫자"
   }
 }

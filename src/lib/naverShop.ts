@@ -156,3 +156,100 @@ export function avgPrice(items: ShopItem[]): number {
   if (!prices.length) return 0
   return Math.round(prices.reduce((s, p) => s + p, 0) / prices.length)
 }
+
+/**
+ * 상위 상품명들의 "단어 개수" 분포를 산출한다.
+ * 레퍼런스 사이트의 "상품명 길이 분포"에 대응.
+ * 반환: [{ words: 10, count: 7 }, ...] (단어 수 오름차순)
+ */
+export function nameLengthDistribution(items: ShopItem[]): {
+  distribution: { words: number; count: number }[]
+  avgWords: number
+  avgChars: number
+  recommendedRange: [number, number]
+} {
+  const wordCounts: number[] = []
+  const charCounts: number[] = []
+  for (const it of items) {
+    const tokens = it.title.split(/\s+/).filter(Boolean)
+    if (!tokens.length) continue
+    wordCounts.push(tokens.length)
+    charCounts.push(it.title.replace(/\s+/g, '').length)
+  }
+  const counter = new Map<number, number>()
+  for (const w of wordCounts) counter.set(w, (counter.get(w) || 0) + 1)
+  const distribution = [...counter.entries()]
+    .map(([words, count]) => ({ words, count }))
+    .sort((a, b) => a.words - b.words)
+
+  const avg = (arr: number[]) =>
+    arr.length ? Math.round((arr.reduce((s, v) => s + v, 0) / arr.length) * 10) / 10 : 0
+  const avgWords = avg(wordCounts)
+
+  // 가장 빈번한 상위 구간을 권장 범위로
+  const sortedByCount = [...distribution].sort((a, b) => b.count - a.count)
+  const topWords = sortedByCount.slice(0, 3).map(d => d.words).sort((a, b) => a - b)
+  const recommendedRange: [number, number] =
+    topWords.length ? [topWords[0], topWords[topWords.length - 1]] : [0, 0]
+
+  return { distribution, avgWords, avgChars: avg(charCounts), recommendedRange }
+}
+
+/**
+ * 상품 주요정보 분류 — 상위 상품명에 자주 등장하는 키워드를
+ * 사전 기반으로 "형태 / 특징 / 사용부위 / 용량·수량" 그룹으로 묶는다.
+ * (네이버 쇼핑이 노출하는 '주요정보' 영역에 대응하는 휴리스틱)
+ */
+const ATTRIBUTE_DICT: { group: string; patterns: RegExp[] }[] = [
+  {
+    group: '사용부위',
+    patterns: [/허리/, /복부/, /어깨/, /목/, /무릎/, /발/, /손목/, /종아리/, /눈/, /얼굴/, /등/, /배/, /다리/, /손/, /전신/, /국소/],
+  },
+  {
+    group: '형태',
+    patterns: [/매트/, /팩/, /벨트/, /패드/, /기기/, /마사지기/, /쿠션/, /방석/, /담요/, /찜질기/, /온열기/, /램프/, /밴드/, /스틱/, /롤러/],
+  },
+  {
+    group: '특징/기능',
+    patterns: [/원적외선/, /근적외선/, /게르마늄/, /무선/, /충전/, /usb/i, /전기/, /온도조절/, /타이머/, /휴대용/, /미니/, /대형/, /접이식/, /방수/, /의료기기?/, /천연/, /국산/, /led/i, /자동/, /고급/],
+  },
+  {
+    group: '대상',
+    patterns: [/생리통/, /여성/, /남성/, /산모/, /임산부/, /어르신/, /노인/, /아기/, /유아/, /반려/, /강아지/, /고양이/, /사무실/, /가정용/, /업소용/],
+  },
+]
+
+export function extractKeyInfo(
+  items: ShopItem[],
+): { group: string; items: { word: string; count: number }[] }[] {
+  // 단어별 등장 상품 수 카운트 (상품당 1회)
+  const wordCount = new Map<string, number>()
+  for (const it of items) {
+    const seen = new Set<string>()
+    for (const raw of it.title.split(/\s+/)) {
+      const w = raw.trim()
+      if (w.length < 2) continue
+      const lower = w.toLowerCase()
+      if (seen.has(lower)) continue
+      seen.add(lower)
+      wordCount.set(w, (wordCount.get(w) || 0) + 1)
+    }
+  }
+
+  const result: { group: string; items: { word: string; count: number }[] }[] = []
+  for (const { group, patterns } of ATTRIBUTE_DICT) {
+    const matched = new Map<string, number>()
+    for (const [word, count] of wordCount) {
+      if (count < 2) continue // 2개 이상 상품에 등장
+      if (patterns.some(p => p.test(word))) {
+        matched.set(word, count)
+      }
+    }
+    const list = [...matched.entries()]
+      .map(([word, count]) => ({ word, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6)
+    if (list.length) result.push({ group, items: list })
+  }
+  return result
+}

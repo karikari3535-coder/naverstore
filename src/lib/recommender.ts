@@ -13,6 +13,7 @@ export interface KeywordStat {
 export interface Competition {
   totalProducts: number   // 네이버 쇼핑 전체 상품 수
   avgPrice: number
+  searchVolume?: number   // 메인 키워드 월간 검색량 (검색광고 API)
 }
 
 const normalize = (arr: number[]): number[] => {
@@ -62,12 +63,30 @@ export function buildProductName(
 }
 
 /**
- * 진입 난이도 (0~100). 검색량 API가 없으므로
- * 전체 상품 수(공급 경쟁)와 평균가격대를 보조 지표로 사용.
+ * 진입 난이도 (0~100).
+ * 검색량(수요)이 있으면 "상품 수 ÷ 검색량" 경쟁률을 반영하고,
+ * 없으면 전체 상품 수(공급 경쟁)만으로 추정한다.
+ *
+ * 핵심 직관:
+ *  - 상품 수가 많을수록(공급 과잉) 경쟁 ↑
+ *  - 검색량 대비 상품 수가 많을수록(레드오션) 경쟁 ↑
  */
 export function calcDifficulty(c: Competition): number {
-  // 상품 수가 많을수록 경쟁 심함 (로그 스케일)
-  const supply = Math.min(Math.log10(Math.max(c.totalProducts, 1)) / 6, 1) // 100만개=1.0
+  // 1) 공급 경쟁: 상품 수 로그 스케일 (100만개 = 1.0)
+  const supply = Math.min(Math.log10(Math.max(c.totalProducts, 1)) / 6, 1)
+
+  if (c.searchVolume && c.searchVolume > 0) {
+    // 2) 경쟁률 = 상품 수 / 월간 검색량
+    //    경쟁률이 높을수록(검색량 대비 상품 과잉) 레드오션
+    const ratio = c.totalProducts / c.searchVolume
+    // ratio 1 이하면 블루오션, 50 이상이면 극심한 레드오션 (로그 스케일)
+    const competition = Math.min(Math.log10(Math.max(ratio, 1)) / 2, 1) // ratio 100 = 1.0
+    // 공급 40% + 경쟁률 60% 가중
+    const raw = (supply * 0.4 + competition * 0.6) * 100
+    return Math.round(Math.min(Math.max(raw, 5), 95))
+  }
+
+  // 검색량이 없을 때: 공급 경쟁만으로
   const raw = supply * 100
   return Math.round(Math.min(Math.max(raw, 5), 95))
 }
