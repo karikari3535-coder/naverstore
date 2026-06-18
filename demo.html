@@ -7,9 +7,11 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <style>
   :root{
-    --bg:#FDF6F0; --card:#FFF; --ink:#2A2420; --gray:#8A817A; --line:#EFE6DC; --soft:#FFFBF7;
-    --primary:#FF6B4A; --primary-dark:#E5512F; --green:#1FA37A; --yellow:#E8A33D; --red:#E5604D;
-    --radius:20px; --shadow:0 12px 44px rgba(120,80,50,.10);
+    /* 셀러랩스 공식 디자인 토큰 (sellerlabs.co.kr) */
+    --bg:#FDF6F0; --card:#FFF; --ink:#1A1430; --gray:#60697B; --line:#ECE8F5; --soft:#F8F6FD;
+    --primary:#6100FF; --primary-dark:#5000D9; --primary-soft:#F3EDFF;
+    --green:#1FA37A; --yellow:#E8A33D; --red:#FF4D4F;
+    --radius:20px; --shadow:0 12px 44px rgba(97,0,255,.10);
     font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;
   }
   *{margin:0;padding:0;box-sizing:border-box}
@@ -20,13 +22,13 @@
     box-shadow:0 8px 22px rgba(255,107,74,.34);text-decoration:none}
   .btn:hover{background:var(--primary-dark);transform:translateY(-2px)}
   .btn:disabled{opacity:.6;cursor:default;transform:none}
-  .pill{display:inline-block;background:#FFF0EB;color:var(--primary-dark);padding:5px 14px;
+  .pill{display:inline-block;background:var(--primary-soft);color:var(--primary-dark);padding:5px 14px;
     border-radius:999px;font-size:13px;font-weight:600;margin:3px}
   .pill-green{display:inline-block;background:#E9F7F1;color:#147A57;padding:5px 14px;
     border-radius:999px;font-size:13px;font-weight:600;margin:3px}
   .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;margin-left:6px;vertical-align:middle}
   .badge-live{background:#E9F7F1;color:#147A57}
-  .badge-demo{background:#FFF0EB;color:var(--primary-dark)}
+  .badge-demo{background:var(--primary-soft);color:var(--primary-dark)}
   .loading{display:flex;align-items:center;justify-content:center;gap:10px;padding:30px;color:var(--gray);font-weight:600}
   .spinner{width:18px;height:18px;border:2.5px solid var(--line);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
@@ -40,14 +42,14 @@
   .hero{padding:72px 0 48px;text-align:center}
   .hero .eyebrow{color:var(--primary);font-weight:700;font-size:15px;margin-bottom:14px}
   .hero h1{font-size:clamp(28px,5vw,48px);font-weight:800;letter-spacing:-1.5px;line-height:1.28}
-  .hero h1 .hl{background:linear-gradient(transparent 58%,#FFD9A0 58%);padding:0 4px}
+  .hero h1 .hl{background:linear-gradient(transparent 58%,#D7C8FF 58%);padding:0 4px}
   .hero p.lead{font-size:18px;color:var(--gray);margin:22px auto 0;max-width:600px}
 
   .tool{margin:40px auto 0;max-width:760px;background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:32px;text-align:left}
   .modes{display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap}
   .mode-btn{flex:1;min-width:118px;padding:12px;border:1.5px solid var(--line);background:#fff;
     border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;color:var(--gray);transition:.2s}
-  .mode-btn.active{border-color:var(--primary);color:var(--primary);background:#FFF6F3}
+  .mode-btn.active{border-color:var(--primary);color:var(--primary);background:#F3EDFF}
   label{display:block;font-weight:700;font-size:14px;margin-bottom:8px}
   .input-row{display:flex;gap:10px}
   .input-row input{flex:1;padding:16px 18px;border:1.5px solid var(--line);border-radius:12px;
@@ -64,8 +66,8 @@
 
   .vs{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:stretch;margin-bottom:20px}
   .vs-col{border-radius:16px;padding:18px}
-  .vs-old{background:#F7F2EC;border:1px solid var(--line)}
-  .vs-new{background:linear-gradient(135deg,#FFF1EC,#FFF9F6);border:1.5px solid var(--primary)}
+  .vs-old{background:#F4F2FA;border:1px solid var(--line)}
+  .vs-new{background:linear-gradient(135deg,#F3EDFF,#FBF9FF);border:1.5px solid var(--primary)}
   .vs-col .tag{font-size:12px;font-weight:700;margin-bottom:8px}
   .vs-old .tag{color:var(--gray)}.vs-new .tag{color:var(--primary-dark)}
   .vs-col .txt{font-size:17px;font-weight:800;letter-spacing:-.4px;line-height:1.4}
@@ -98,7 +100,7 @@
   .kw-bar{margin-bottom:10px}
   .kw-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
   .kw-track{height:7px;background:var(--line);border-radius:99px;overflow:hidden}
-  .kw-fill{height:100%;background:linear-gradient(90deg,var(--primary),#FF9E85);border-radius:99px}
+  .kw-fill{height:100%;background:linear-gradient(90deg,var(--primary),#A47CFF);border-radius:99px}
   .total-vol{font-size:13px;color:var(--gray);margin-top:8px}.total-vol b{color:var(--primary);font-size:18px}
   .reason{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:16px}
   .reason ol{padding-left:18px;font-size:13.5px;color:#4A4240}.reason li{margin-bottom:5px}
@@ -111,7 +113,7 @@
   .tracked-del:hover{border-color:var(--red);color:var(--red)}
 
   /* 검색량 요약 카드 */
-  .vol-summary{margin-top:20px;background:linear-gradient(135deg,#EAF2FF,#F4F9FF);border:1px solid #C9DEFF;border-radius:14px;padding:18px 20px}
+  .vol-summary{margin-top:20px;background:linear-gradient(135deg,#F1EAFF,#FAF7FF);border:1px solid #D9C9FF;border-radius:14px;padding:18px 20px}
   .vol-main{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
   .vol-label{font-size:14px;font-weight:600;color:var(--gray)}
   .vol-num{font-size:30px;font-weight:800;color:var(--primary);line-height:1}
@@ -124,7 +126,7 @@
   .len-bars{display:flex;align-items:flex-end;gap:8px;height:120px;margin:10px 0 6px;overflow-x:auto}
   .len-col{flex:1;min-width:38px;display:flex;flex-direction:column;align-items:center;height:100%}
   .len-bar-track{flex:1;width:100%;display:flex;align-items:flex-end}
-  .len-bar{width:100%;background:#D7E3F4;border-radius:6px 6px 0 0;transition:height .4s}
+  .len-bar{width:100%;background:#E2D6FA;border-radius:6px 6px 0 0;transition:height .4s}
   .len-bar.len-hot{background:var(--primary)}
   .len-cnt{font-size:12px;font-weight:700;color:var(--ink);margin-top:4px}
   .len-w{font-size:11px;color:var(--gray)}
