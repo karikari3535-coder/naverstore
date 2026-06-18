@@ -107,14 +107,89 @@ export async function getKeywordVolumes(
 }
 
 /**
+ * 특정 키워드들의 검색량을 "직접" 조회한다.
+ * keywordstool 의 hintKeywords 는 콤마로 최대 5개까지 받으며,
+ * 입력한 키워드 자체의 검색량을 결과에 포함시켜 준다.
+ *
+ * 연관키워드 목록(getKeywordVolumes)에는 "전기/복부/어깨" 같은
+ * 일반 단어가 빠지는 경우가 많아, 추천에 쓰인 키워드는 이 함수로
+ * 정확한 검색량을 보강한다.
+ *
+ * 실패한 배치는 건너뛰고, 가능한 만큼만 반환한다.
+ */
+export async function getVolumesForKeywords(
+  words: string[],
+  env: AdEnv,
+): Promise<KeywordVolume[]> {
+  if (!hasAdKeys(env) || !words.length) return []
+
+  // 공백 제거 + 중복 제거
+  const uniq = [...new Set(words.map(w => w.replace(/\s+/g, '')).filter(Boolean))]
+
+  // 5개씩 배치
+  const batches: string[][] = []
+  for (let i = 0; i < uniq.length; i += 5) batches.push(uniq.slice(i, i + 5))
+
+  const path = '/keywordstool'
+  const results: KeywordVolume[] = []
+
+  // 배치 병렬 호출 (실패 배치는 무시)
+  const settled = await Promise.allSettled(
+    batches.map(async (batch) => {
+      const ts = Date.now().toString()
+      const signature = await sign(env.NAVER_AD_SECRET_KEY!, ts, 'GET', path)
+      const qs = new URLSearchParams({ hintKeywords: batch.join(','), showDetail: '1' })
+      const res = await fetch(`${BASE}${path}?${qs}`, {
+        headers: {
+          'X-Timestamp': ts,
+          'X-API-KEY': env.NAVER_AD_API_KEY!,
+          'X-Customer': env.NAVER_AD_CUSTOMER_ID!,
+          'X-Signature': signature,
+        },
+      })
+      if (!res.ok) return [] as KeywordVolume[]
+      const data: any = await res.json().catch(() => ({}))
+      const list = Array.isArray(data.keywordList) ? data.keywordList : []
+      // 배치에 넣은 키워드만 추려서 반환 (연관확장 노이즈 제거)
+      const batchSet = new Set(batch.map(b => b.toLowerCase()))
+      return list
+        .filter((k: any) => batchSet.has(String(k.relKeyword || '').replace(/\s+/g, '').toLowerCase()))
+        .map((k: any) => {
+          const pc = toNum(k.monthlyPcQcCnt)
+          const mobile = toNum(k.monthlyMobileQcCnt)
+          return {
+            word: String(k.relKeyword || '').replace(/\s+/g, ''),
+            volume: pc + mobile,
+            pc,
+            mobile,
+            compIdx: String(k.compIdx || ''),
+          } as KeywordVolume
+        })
+    }),
+  )
+
+  for (const s of settled) {
+    if (s.status === 'fulfilled') results.push(...s.value)
+  }
+  return results
+}
+
+/**
  * 검색량 리스트를 word -> volume 맵으로 변환 (빠른 조회용).
  * 키는 공백 제거 + 소문자 정규화.
  */
-export function buildVolumeMap(vols: KeywordVolume[]): Map<string, KeywordVolume> {
+export function buildVolumeMap(...sources: KeywordVolume[][]): Map<string, KeywordVolume> {
   const m = new Map<string, KeywordVolume>()
-  for (const v of vols) {
-    const key = v.word.replace(/\s+/g, '').toLowerCase()
-    if (key) m.set(key, v)
+  for (const vols of sources) {
+    for (const v of vols) {
+      const key = v.word.replace(/\s+/g, '').toLowerCase()
+      // 더 큰 검색량(또는 기존 0이던 값)을 우선 유지
+      if (!key) continue
+      const prev = m.get(key)
+      if (!prev || (v.volume > 0 && prev.volume === 0) || v.volume > prev.volume) {
+        m.set(key, v)
+      }
+    }
   }
   return m
 }

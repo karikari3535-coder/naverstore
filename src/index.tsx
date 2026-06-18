@@ -10,7 +10,7 @@ import {
   extractKeyInfo,
 } from './lib/naverShop'
 import { scoreKeywords, buildProductName, calcDifficulty, verdictOf } from './lib/recommender'
-import { getKeywordVolumes, buildVolumeMap, lookupVolume, hasAdKeys } from './lib/naverSearchAd'
+import { getKeywordVolumes, getVolumesForKeywords, buildVolumeMap, lookupVolume, hasAdKeys } from './lib/naverSearchAd'
 
 type Bindings = {
   NAVER_SHOP_ID?: string
@@ -45,8 +45,8 @@ app.get('/api/analyze', async (c) => {
   if (!kw) return c.json({ error: '키워드(kw)가 필요해요.' }, 400)
 
   try {
-    // 쇼핑 + 검색량 병렬 호출 (검색량 실패해도 분석은 계속)
-    const [shop, adVolumes] = await Promise.all([
+    // 쇼핑 + 연관키워드 검색량 병렬 호출 (검색량 실패해도 분석은 계속)
+    const [shop, relVolumes] = await Promise.all([
       searchShop(kw, c.env, 40),
       getKeywordVolumes(kw, c.env).catch(() => []),
     ])
@@ -60,8 +60,13 @@ app.get('/api/analyze', async (c) => {
       }, 422)
     }
 
-    // 검색량 맵 구성 + 키워드에 검색량 병합
-    const volMap = buildVolumeMap(adVolumes)
+    // 빈도 추출된 키워드들 + 메인 키워드의 정확한 검색량을 "직접 조회"로 보강.
+    // (연관키워드 목록에는 전기/복부/어깨 같은 일반 단어가 빠지는 경우가 많음)
+    const targetWords = [kw, ...freqKws.map(k => k.word)]
+    const directVolumes = await getVolumesForKeywords(targetWords, c.env).catch(() => [])
+
+    // 두 소스 병합 (직접조회 값이 연관키워드보다 우선)
+    const volMap = buildVolumeMap(relVolumes, directVolumes)
     const hasVolume = volMap.size > 0
     const withVolume = freqKws.map(k => ({
       word: k.word,
@@ -91,6 +96,12 @@ app.get('/api/analyze', async (c) => {
       .map(k => k.word)
       .slice(0, 10)
 
+    // 추천 상품명에 실제 사용된 키워드들의 검색량 합 (= 총 노출 검색량)
+    const usedVolume = ranked
+      .filter(k => usedWords.includes(k.word))
+      .reduce((s, k) => s + (k.volume || 0), 0)
+      + (usedWords.includes(kw) ? (mainSearchVolume || 0) : 0)
+
     // 길이 분포 & 주요정보
     const lengthDist = nameLengthDistribution(shop.items)
     const keyInfo = extractKeyInfo(shop.items)
@@ -108,6 +119,7 @@ app.get('/api/analyze', async (c) => {
       mainSearchVolumePc: mainVol?.pc,
       mainSearchVolumeMobile: mainVol?.mobile,
       mainCompIdx: mainVol?.compIdx,
+      totalExposureVolume: usedVolume,               // 추천명 키워드 검색량 합계
       keywords: ranked.map(k => ({
         word: k.word,
         freq: k.freq,
