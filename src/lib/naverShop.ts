@@ -201,33 +201,65 @@ export function nameLengthDistribution(items: ShopItem[]): {
  * (네이버 쇼핑이 노출하는 '주요정보' 영역에 대응하는 휴리스틱)
  */
 const ATTRIBUTE_DICT: { group: string; patterns: RegExp[] }[] = [
+  // 식품/농산물
+  {
+    group: '품종/종류',
+    patterns: [/베니하루카/, /호박고구마/, /밤고구마/, /꿀고구마/, /샤인머스캣/, /설향/, /대저/, /스테비아/, /방울/, /대추방울/, /흑/, /적/, /청/, /백/],
+  },
+  {
+    group: '수확/신선도',
+    patterns: [/^\d{2}년산?$/, /^햇[가-힣]+/, /당일수확/, /^수확/, /산지직송/, /직송/, /^생물$/, /냉장/, /냉동/, /숙성/],
+  },
+  {
+    group: '중량/규격',
+    patterns: [/\d+kg/i, /\d+g\b/, /\d+ml/i, /\d+L\b/i, /\d+개입?/, /\d+팩/, /\d+병/, /\d+박스/, /대용량/, /소포장/, /실속/],
+  },
+  // 건강/생활
   {
     group: '사용부위',
-    patterns: [/허리/, /복부/, /어깨/, /목/, /무릎/, /발/, /손목/, /종아리/, /눈/, /얼굴/, /등/, /배/, /다리/, /손/, /전신/, /국소/],
+    patterns: [/허리/, /복부/, /어깨/, /목/, /무릎/, /발/, /손목/, /종아리/, /눈/, /얼굴/, /등/, /다리/, /전신/, /국소/],
   },
   {
     group: '형태',
-    patterns: [/매트/, /팩/, /벨트/, /패드/, /기기/, /마사지기/, /쿠션/, /방석/, /담요/, /찜질기/, /온열기/, /램프/, /밴드/, /스틱/, /롤러/],
+    patterns: [/매트/, /팩/, /벨트/, /패드/, /기기/, /마사지기/, /쿠션/, /방석/, /담요/, /찜질기/, /온열기/, /램프/, /밴드/, /스틱/, /롤러/, /사각형/, /원형/, /의자방석/, /메모리폼/],
+  },
+  // 패션/잡화
+  {
+    group: '소재',
+    patterns: [/폴리에스테르/, /폴리에스터/, /면\b/, /순면/, /밀짚/, /라텍스/, /스펀지/, /가죽/, /데님/, /린넨/, /마\b/, /지사/, /나일론/, /스판/],
+  },
+  {
+    group: '색상',
+    patterns: [/화이트/, /블랙/, /그레이/, /네이비/, /베이지/, /아이보리/, /브라운/, /그린/, /핑크/, /레드/, /블루/, /카키/],
+  },
+  {
+    group: '사용계절',
+    patterns: [/봄\b/, /여름/, /가을/, /겨울/, /사계절/, /간절기/],
+  },
+  // 가전
+  {
+    group: '용량/등급',
+    patterns: [/\d+등급/, /\d+kg/i, /인버터/, /BLDC/i, /절전/, /저소음/, /\d+인용/, /\d+L\b/i],
   },
   {
     group: '특징/기능',
-    patterns: [/원적외선/, /근적외선/, /게르마늄/, /무선/, /충전/, /usb/i, /전기/, /온도조절/, /타이머/, /휴대용/, /미니/, /대형/, /접이식/, /방수/, /의료기기?/, /천연/, /국산/, /led/i, /자동/, /고급/],
+    patterns: [/원적외선/, /근적외선/, /게르마늄/, /무선/, /충전/, /usb/i, /전기/, /온도조절/, /타이머/, /휴대용/, /미니/, /대형/, /접이식/, /방수/, /의료기기?/, /천연/, /국산/, /무농약/, /유기농/, /친환경/, /led/i, /자동/, /고급/, /자외선차단/, /기능성/, /미끄럼방지/, /통풍/, /세척/, /손질/],
   },
   {
     group: '대상',
-    patterns: [/생리통/, /여성/, /남성/, /산모/, /임산부/, /어르신/, /노인/, /아기/, /유아/, /반려/, /강아지/, /고양이/, /사무실/, /가정용/, /업소용/],
+    patterns: [/생리통/, /여성/, /남성/, /남녀공용/, /산모/, /임산부/, /어르신/, /노인/, /아기/, /유아/, /반려/, /강아지/, /고양이/, /사무실/, /가정용/, /업소용/],
   },
 ]
 
 export function extractKeyInfo(
   items: ShopItem[],
 ): { group: string; items: { word: string; count: number }[] }[] {
-  // 단어별 등장 상품 수 카운트 (상품당 1회)
+  // 단어별 등장 상품 수 카운트 (상품당 1회). 괄호/특수문자는 정리.
   const wordCount = new Map<string, number>()
   for (const it of items) {
     const seen = new Set<string>()
     for (const raw of it.title.split(/\s+/)) {
-      const w = raw.trim()
+      const w = raw.trim().replace(/^[\[\(]+|[\]\)]+$/g, '') // 양끝 괄호 제거
       if (w.length < 2) continue
       const lower = w.toLowerCase()
       if (seen.has(lower)) continue
@@ -237,10 +269,13 @@ export function extractKeyInfo(
   }
 
   const result: { group: string; items: { word: string; count: number }[] }[] = []
+  const usedWords = new Set<string>() // 그룹 간 중복 단어 방지 (먼저 매칭된 그룹이 우선)
   for (const { group, patterns } of ATTRIBUTE_DICT) {
     const matched = new Map<string, number>()
     for (const [word, count] of wordCount) {
       if (count < 2) continue // 2개 이상 상품에 등장
+      const lower = word.toLowerCase()
+      if (usedWords.has(lower)) continue
       if (patterns.some(p => p.test(word))) {
         matched.set(word, count)
       }
@@ -249,7 +284,10 @@ export function extractKeyInfo(
       .map(([word, count]) => ({ word, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 6)
-    if (list.length) result.push({ group, items: list })
+    if (list.length >= 2) { // 항목 1개뿐인 그룹은 의미가 약하므로 생략
+      list.forEach(i => usedWords.add(i.word.toLowerCase()))
+      result.push({ group, items: list })
+    }
   }
   return result
 }

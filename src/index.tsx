@@ -9,7 +9,7 @@ import {
   nameLengthDistribution,
   extractKeyInfo,
 } from './lib/naverShop'
-import { scoreKeywords, buildProductName, calcDifficulty, verdictOf } from './lib/recommender'
+import { scoreKeywords, buildProductName, buildReasons, calcDifficulty, verdictOf } from './lib/recommender'
 import { getKeywordVolumes, getVolumesForKeywords, buildVolumeMap, lookupVolume, hasAdKeys } from './lib/naverSearchAd'
 
 type Bindings = {
@@ -79,6 +79,9 @@ app.get('/api/analyze', async (c) => {
     const usedWords = name.split(' ')
     const category = extractCategory(shop.items)
 
+    // 최적화 이유 (레퍼런스 패턴 — 각 키워드별 배치 근거)
+    const reasons = buildReasons(kw, usedWords, ranked, volMap.size > 0)
+
     // 메인 키워드 자체의 검색량
     const mainVol = lookupVolume(volMap, kw)
     const mainSearchVolume = mainVol?.volume
@@ -133,6 +136,7 @@ app.get('/api/analyze', async (c) => {
       avgChars: lengthDist.avgChars,
       recommendedRange: lengthDist.recommendedRange,
       keyInfo,
+      reasons,                                       // 최적화 이유 (레퍼런스 대응)
       sampleTitles: shop.items.slice(0, 5).map(i => i.title),
     })
   } catch (e: any) {

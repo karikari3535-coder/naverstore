@@ -307,11 +307,13 @@ async function fromApi(kw,ex){
     mainSearchVolumePc:j.mainSearchVolumePc,
     mainSearchVolumeMobile:j.mainSearchVolumeMobile,
     mainCompIdx:j.mainCompIdx,
+    totalExposureVolume:j.totalExposureVolume,
     lengthDistribution:j.lengthDistribution||[],
     avgWords:j.avgWords,
     avgChars:j.avgChars,
     recommendedRange:j.recommendedRange,
     keyInfo:j.keyInfo||[],
+    reasons:j.reasons||[],
     live:true
   };
 }
@@ -359,9 +361,16 @@ async function generate(){
 function render(kw,ex,db){
   const name=db.serverName||buildName(kw,JSON.parse(JSON.stringify(db.keywords)),ex);
   const used=name.split(" ");
-  const bars=db.keywords.filter(k=>used.includes(k.word));
+  let bars=db.keywords.filter(k=>used.includes(k.word));
+  // 메인 키워드 자체 검색량도 막대/합계에 포함 (레퍼런스와 동일)
+  if(db.hasVolume&&db.mainSearchVolume!=null&&!bars.some(b=>b.word===kw)){
+    bars=[{word:kw,freq:0,volume:db.mainSearchVolume},...bars];
+  }
   const maxV=Math.max(...bars.map(b=>b.volume||b.freq),1);
-  const total=db.hasVolume?bars.reduce((s,b)=>s+(b.volume||0),0):0;
+  // 서버가 계산한 총 노출 검색량(메인 키워드 포함) 우선 사용
+  const total=db.hasVolume
+    ?(db.totalExposureVolume!=null?db.totalExposureVolume:bars.reduce((s,b)=>s+(b.volume||0),0))
+    :0;
   const diff=db.difficulty;
   const v=verdictOf(diff);
   const cur=document.getElementById('currentName').value.trim();
@@ -463,16 +472,15 @@ function render(kw,ex,db){
       ${db.sampleTitles.map(t=>`<li>${esc(t)}</li>`).join('')}</ol></div>`;
   }
 
-  if(mode!=='quick'){
-    const reasons=db.hasVolume
-      ? [`필수 키워드 "${esc(kw)}" 포함`,`상위노출 빈도 1위 키워드 우선 배치`,`검색량 최상위 키워드 결합으로 노출 확대`,
-         `동일 단어 비연속 배치로 SEO 패널티 회피`,`${used.length}개 단어 사용 (네이버 권장 7개 내외)`,`특수문자 0개 · 50자 이내 준수`]
-      : [`필수 키워드 "${esc(kw)}" 포함`,`네이버 쇼핑 상위 40개에서 가장 자주 쓰인 키워드 우선 배치`,
-         `상위 셀러들이 공통으로 쓰는 세부 키워드 결합`,`동일 단어 비연속 배치로 SEO 패널티 회피`,
-         `${used.length}개 단어 사용 (네이버 권장 7개 내외)`,`특수문자 0개 · 50자 이내 준수`];
-    html+=`<div class="reason"><h4 class="meta-h4">💡 왜 이 상품명일까요?</h4><ol>
-      ${reasons.map(r=>`<li>${r}</li>`).join('')}</ol></div>`;
-  }
+  // 최적화 이유 — 서버 생성(레퍼런스 패턴) 우선, 없으면 데모용 기본 문구
+  let reasons=(db.reasons&&db.reasons.length)?db.reasons:(db.hasVolume
+    ? [`필수 키워드 "${kw}" 포함`,`상위노출 빈도 1위 키워드 우선 배치`,`검색량 최상위 키워드 결합으로 노출 확대`,
+       `동일 단어 비연속 배치로 SEO 패널티 회피`,`${used.length}개 단어 사용 (네이버 권장 7~9개)`,`특수문자 0개 · 50자 이내 준수`]
+    : [`필수 키워드 "${kw}" 포함`,`네이버 쇼핑 상위 40개에서 가장 자주 쓰인 키워드 우선 배치`,
+       `상위 셀러들이 공통으로 쓰는 세부 키워드 결합`,`동일 단어 비연속 배치로 SEO 패널티 회피`,
+       `${used.length}개 단어 사용 (네이버 권장 7~9개)`,`특수문자 0개 · 50자 이내 준수`]);
+  html+=`<div class="reason reason-opt"><h4 class="meta-h4">💡 최적화 이유</h4><ol>
+    ${reasons.map(r=>`<li>${esc(r)}</li>`).join('')}</ol></div>`;
 
   const res=document.getElementById('result');
   res.innerHTML=html;res.classList.add('show');

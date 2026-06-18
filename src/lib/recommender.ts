@@ -39,7 +39,7 @@ export function buildProductName(
   main: string,
   kws: KeywordStat[],
   extras: { brand?: string; volume?: string } = {},
-  maxWords = 7,
+  maxWords = 9,
   maxLen = 50,
 ): string {
   const ranked = scoreKeywords(kws)
@@ -60,6 +60,91 @@ export function buildProductName(
     out.push(extras.volume)
   }
   return out.join(' ')
+}
+
+/**
+ * "최적화 이유"를 추천 상품명의 각 키워드별로 자동 생성한다.
+ * 레퍼런스(storebooster) 패턴을 그대로 따른다:
+ *  - 필수 키워드 배치 / 상위 키워드 우선순위 / 동일단어 반복 회피
+ *  - 신뢰도·신선도·기능 표현 / 단어 수 최적화 / 검색 의도 매칭
+ *
+ * @param main      메인(필수) 키워드
+ * @param usedWords 추천 상품명에 실제 사용된 단어 배열 (순서대로)
+ * @param ranked    점수순 정렬된 키워드 통계 (volume/freq 보유)
+ * @param hasVolume 검색광고 검색량 데이터 사용 여부
+ */
+export function buildReasons(
+  main: string,
+  usedWords: string[],
+  ranked: KeywordStat[],
+  hasVolume: boolean,
+): string[] {
+  const reasons: string[] = []
+  const stat = (w: string) => ranked.find(k => k.word === w)
+  const fmt = (n?: number) => (n ? n.toLocaleString() + '회' : '')
+
+  // 신뢰도/신선도/기능을 나타내는 키워드 사전
+  const TRUST = /무농약|유기농|친환경|국산|국내산|당일|산지직송|직송|HACCP|정품|무방부제|무첨가|프리미엄/
+  const FRESH = /\d{2}년|신상|당일|수확|햇|신선|냉장|냉동|생물|활/
+  const FORM = /세척|손질|진공|소포장|대용량|선물|박스|세트|kg|g\b/
+  const FUNC = /자외선차단|기능성|무선|충전|온열|방수|접이식|휴대용|대형|미니|자동/
+
+  // 1) 필수 키워드 배치
+  const mainIdx = usedWords.findIndex(w => w === main || main.includes(w) || w.includes(main))
+  if (mainIdx >= 0) {
+    reasons.push(
+      `필수 키워드 배치 — '${main}'을(를) 상품명 ${mainIdx === 0 ? '맨 앞' : (mainIdx + 1) + '번째'}에 배치해 검색 알고리즘의 핵심 매칭 요소를 확보했어요.`,
+    )
+  }
+
+  // 2) 상위 검색량/빈도 키워드 우선순위
+  const topKw = ranked.find(k => usedWords.includes(k.word) && (k.word !== main))
+  if (topKw) {
+    const idx = usedWords.indexOf(topKw.word) + 1
+    const metric = hasVolume && topKw.volume
+      ? `검색량 ${fmt(topKw.volume)}의 상위 키워드`
+      : `상위 ${topKw.freq}개 상품에 등장한 핵심 키워드`
+    reasons.push(
+      `상위 키워드 우선순위 — '${topKw.word}'(${metric})을(를) ${idx}번째에 배치해 높은 검색 수요를 선점했어요.`,
+    )
+  }
+
+  // 3) 신뢰도/신선도/기능/형태 표현 (사용된 단어 기준으로 동적으로)
+  const trustW = usedWords.find(w => TRUST.test(w))
+  if (trustW) reasons.push(`신뢰도 강화 — '${trustW}'(으)로 안전성·품질을 어필해 프리미엄 포지셔닝을 했어요.`)
+
+  const freshW = usedWords.find(w => FRESH.test(w))
+  if (freshW) reasons.push(`신선도 표현 — '${freshW}'(으)로 최신·신선 상품임을 명시해 구매 결정을 유도했어요.`)
+
+  const formW = usedWords.find(w => FORM.test(w) && w !== freshW && w !== trustW)
+  if (formW) reasons.push(`상품 형태/편의 표현 — '${formW}'(으)로 상품 구성·편의성을 강조했어요.`)
+
+  const funcW = usedWords.find(w => FUNC.test(w) && w !== formW)
+  if (funcW) reasons.push(`기능 강조 — '${funcW}' 기능을 명시해 관련 검색 수요에 대응했어요.`)
+
+  // 4) 동일 단어 반복 회피 (필수 키워드가 2회 이상 등장하는 경우)
+  const mainCount = usedWords.filter(w => w === main).length
+  if (mainCount >= 2) {
+    reasons.push(`품종/유형 다양성 표현 — 핵심어를 위치를 분리해 배치하여 상품의 다양한 종류를 폭넓게 커버했어요.`)
+  }
+
+  // 5) 단어 수 최적화
+  reasons.push(
+    `${usedWords.length}개 단어 정확 구성 — 네이버 스마트스토어 최적 길이(7~9단어)에 맞춰 노출을 극대화했어요.`,
+  )
+
+  // 6) 검색 의도 매칭
+  const intentWords = usedWords.filter(w => w !== main).slice(0, 3)
+  if (intentWords.length) {
+    reasons.push(
+      `검색 의도 매칭 — ${intentWords.map(w => `'${w}'`).join(', ')} 등 소비자 주요 검색어를 모두 포함해 검색 범위를 넓혔어요.`,
+    )
+  }
+
+  // 7) 특수문자/길이 규칙
+  reasons.push(`SEO 규칙 준수 — 특수문자 없이 50자 이내로 구성해 검색 패널티를 회피했어요.`)
+
+  return reasons
 }
 
 /**
