@@ -467,11 +467,6 @@ function render(kw,ex,db){
       </div>`).join('')}</div>`;
   }
 
-  if(db.live&&db.sampleTitles&&db.sampleTitles.length){
-    html+=`<div class="reason"><h4 class="meta-h4">🔎 분석한 상위 상품명 (샘플)</h4><ol>
-      ${db.sampleTitles.map(t=>`<li>${esc(t)}</li>`).join('')}</ol></div>`;
-  }
-
   // 최적화 이유 — 서버 생성(레퍼런스 패턴) 우선, 없으면 데모용 기본 문구
   let reasons=(db.reasons&&db.reasons.length)?db.reasons:(db.hasVolume
     ? [`필수 키워드 "${kw}" 포함`,`상위노출 빈도 1위 키워드 우선 배치`,`검색량 최상위 키워드 결합으로 노출 확대`,
