@@ -4,15 +4,21 @@ import styles from './ProductRecommender.module.css';
 import DifficultyGauge from './DifficultyGauge';
 import VersusCompare from './VersusCompare';
 import TrackButton from './TrackButton';
-import { calcDifficulty } from '@/lib/recommender/engine';
+import { calcDifficulty, filterKeywords } from '@/lib/recommender/engine';
 import { AnalyzeResult, RecommendMode } from '@/types/recommender';
 
 export default function ResultCard({ data, name, mode, currentName, onRegistered }: {
   data: AnalyzeResult; name: string; mode: RecommendMode;
   currentName: string; onRegistered?: () => void;
 }) {
-  const used = name.split(' ');
-  const bars = data.keywords.filter(k => used.includes(k.word));
+  const used = name.split(' ').filter(Boolean);
+
+  // ★ 상품명과 동일하게 "필터링된 키워드" 기준으로 통일
+  const validKeywords = useMemo(
+    () => filterKeywords(data.keywords).valid,
+    [data.keywords],
+  );
+  const bars = validKeywords.filter(k => used.includes(k.word));
   const maxV = Math.max(...bars.map(b => b.volume), 1);
   const total = useMemo(() => bars.reduce((s, b) => s + b.volume, 0), [bars]);
   const diff = calcDifficulty(data.competition);
@@ -67,21 +73,16 @@ export default function ResultCard({ data, name, mode, currentName, onRegistered
           <h4 className={styles.metaH4}>🗂 추천 카테고리</h4>
           <span className={styles.pill}>{data.category}</span>
           <h4 className={styles.metaH4} style={{ marginTop: 16 }}>🏷 추천 태그</h4>
-          {[...data.extraTags, ...data.keywords.filter(k => !used.includes(k.word)).map(k => k.word)]
+          {[...data.extraTags, ...validKeywords.filter(k => !used.includes(k.word)).map(k => k.word)]
             .slice(0, 10).map(t => <span key={t} className={styles.pill}>{t}</span>)}
         </div>
       </div>
 
-      {mode !== 'quick' && (
+      {mode !== 'quick' && data.reasons && data.reasons.length > 0 && (
         <div className={styles.reason}>
           <h4 className={styles.metaH4}>💡 왜 이 상품명일까요?</h4>
           <ol className={styles.reasonList}>
-            {(data.reasons && data.reasons.length
-              ? data.reasons
-              : [`필수 키워드 "${data.keyword}" 포함`, '상위노출 빈도 1위 키워드 우선 배치',
-                 '검색량 최상위 키워드 결합으로 노출 확대', '동일 단어 비연속 배치로 SEO 패널티 회피',
-                 `${used.length}개 단어 사용 (네이버 권장 7개 내외)`, '특수문자 0개 · 50자 이내 준수']
-            ).map((r, i) => <li key={i}>{r}</li>)}
+            {data.reasons.map((r, i) => <li key={i}>{r}</li>)}
           </ol>
         </div>
       )}
