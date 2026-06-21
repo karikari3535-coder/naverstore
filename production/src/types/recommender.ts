@@ -19,6 +19,17 @@ export interface AnalyzeResult {
   competition: Competition;
   extraTags: string[];
   oppKeywords: string[];
+  productName?: string;
+  reasons?: string[];
+  lengthDist?: {
+    buckets: { words: number; count: number; isHot: boolean }[];
+    avgWords: number;
+    recommendRange: [number, number];
+  };
+  excludedKeywords?: {
+    numeric: string[];
+    promo: string[];
+  };
 }
 
 export type RecommendMode = 'quick' | 'complete' | 'competition';

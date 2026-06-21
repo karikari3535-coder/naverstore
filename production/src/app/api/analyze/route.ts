@@ -5,10 +5,18 @@ import {
   extractFrequency,
   extractCategory,
 } from '@/lib/recommender/naverSearchAd';
+import {
+  scoreKeywords,
+  buildProductName,
+  filterKeywords,        // ★ 추가
+  lengthDistribution,    // ★ 추가
+  buildReasons,          // ★ 추가
+} from '@/lib/recommender/engine';
 import { AnalyzeResult } from '@/types/recommender';
 
 export async function GET(req: NextRequest) {
   const kw = req.nextUrl.searchParams.get('kw');
+  const brand = req.nextUrl.searchParams.get('brand') ?? undefined;
   if (!kw) return NextResponse.json({ error: '키워드를 입력하세요' }, { status: 400 });
 
   try {
@@ -21,15 +29,23 @@ export async function GET(req: NextRequest) {
     const freqMap = extractFrequency(titles);
     const volMap = Object.fromEntries(volumes.map(v => [v.word, v]));
 
-    const keywords = Object.entries(freqMap)
+    const rawKeywords = Object.entries(freqMap)
       .map(([word, freq]) => ({ word, freq, volume: volMap[word]?.volume ?? 0 }))
       .filter(k => k.volume > 0)
-      .sort((a, b) => b.freq - a.freq)
-      .slice(0, 12);
+      .sort((a, b) => b.freq - a.freq);
 
-    // ★ 카테고리 자동 산출: 상위 상품들의 최빈 category 경로
+    // ★ 숫자/수식어 필터링
+    const filtered = filterKeywords(rawKeywords);
+    const keywords = filtered.valid.slice(0, 12);
+
+    // ★ 상품명 생성 + 배치 근거
+    const finalName = buildProductName(kw, keywords, { brand });
+    const reasons = buildReasons(kw, finalName, keywords, filtered);
+
+    // ★ 단어 수 분포
+    const lengthDist = lengthDistribution(titles);
+
     const category = extractCategory(items);
-
     const bundleRatio =
       titles.filter(t => /\d+\s?kg|세트|묶음|박스/.test(t)).length / (titles.length || 1);
     const mainVol = volMap[kw.replace(/\s/g, '')]?.volume ?? volumes[0]?.volume ?? 0;
@@ -37,7 +53,14 @@ export async function GET(req: NextRequest) {
     const result: AnalyzeResult = {
       keyword: kw,
       category,
+      productName: finalName,   // ★ 추가
+      reasons,                  // ★ 추가
       keywords,
+      lengthDist,               // ★ 추가
+      excludedKeywords: {       // ★ 추가
+        numeric: filtered.excludedNumeric,
+        promo: filtered.excludedPromo,
+      },
       competition: {
         bundleRatio,
         avgReview: 1.2,
