@@ -6,11 +6,10 @@ import {
   extractCategory,
 } from '@/lib/recommender/naverSearchAd';
 import {
-  scoreKeywords,
-  buildProductName,
-  filterKeywords,        // ★ 추가
-  lengthDistribution,    // ★ 추가
-  buildReasons,          // ★ 추가
+  buildRoledName,        // ★ V2
+  buildReasonsV2,        // ★ V2
+  filterKeywords,
+  lengthDistribution,
 } from '@/lib/recommender/engine';
 import { AnalyzeResult } from '@/types/recommender';
 
@@ -38,9 +37,9 @@ export async function GET(req: NextRequest) {
     const filtered = filterKeywords(rawKeywords);
     const keywords = filtered.valid.slice(0, 12);
 
-    // ★ 상품명 생성 + 배치 근거
-    const finalName = buildProductName(kw, keywords, { brand });
-    const reasons = buildReasons(kw, finalName, keywords, filtered);
+    // ★ V2: 역할 기반 상품명 + 다단계 이유
+    const { name: finalName, roled } = buildRoledName(kw, keywords, { brand });
+    const reasons = buildReasonsV2(kw, roled, filtered);
 
     // ★ 단어 수 분포
     const lengthDist = lengthDistribution(titles);

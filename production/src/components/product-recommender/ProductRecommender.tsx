@@ -4,7 +4,7 @@ import styles from './ProductRecommender.module.css';
 import ModeTabs from './ModeTabs';
 import ResultCard from './ResultCard';
 import TrackedList from './TrackedList';
-import { buildProductName } from '@/lib/recommender/engine';
+import { buildRoledName, buildReasonsV2, filterKeywords } from '@/lib/recommender/engine';
 import { AnalyzeResult, RecommendMode } from '@/types/recommender';
 
 const DEMO: AnalyzeResult = {
@@ -20,6 +20,23 @@ const DEMO: AnalyzeResult = {
   extraTags: ['스테비아토마토', '못난이토마토', '흑토마토', '산지직송', '유럽종완숙'],
   oppKeywords: ['흑대추방울토마토', '부산대저', '짭짜리'],
 };
+
+// 데모 결과에도 V2 로직을 적용해 productName / reasons를 미리 채워둔다
+function withV2(result: AnalyzeResult, kw: string, brand?: string): AnalyzeResult {
+  // 서버가 이미 V2 결과를 주면 그대로 사용
+  if (result.productName && result.reasons?.length) return result;
+  const filtered = filterKeywords(result.keywords);
+  const { name, roled } = buildRoledName(kw, filtered.valid, { brand });
+  return {
+    ...result,
+    productName: name,
+    reasons: buildReasonsV2(kw, roled, filtered),
+    excludedKeywords: result.excludedKeywords ?? {
+      numeric: filtered.excludedNumeric,
+      promo: filtered.excludedPromo,
+    },
+  };
+}
 
 export default function ProductRecommender() {
   const [mode, setMode] = useState<RecommendMode>('quick');
@@ -37,12 +54,14 @@ export default function ProductRecommender() {
     setLoading(true);
     try {
       const res = await fetch(`/api/analyze?kw=${encodeURIComponent(kw)}`);
-      const result: AnalyzeResult = res.ok ? await res.json() : DEMO;
+      const raw: AnalyzeResult = res.ok ? await res.json() : DEMO;
+      const result = withV2(raw, kw, brand || undefined);
       setData(result);
-      setName(buildProductName(kw, result.keywords, { brand, volume }));
+      setName(result.productName ?? '');
     } catch {
-      setData(DEMO);
-      setName(buildProductName(kw, DEMO.keywords, { brand, volume }));
+      const result = withV2(DEMO, kw, brand || undefined);
+      setData(result);
+      setName(result.productName ?? '');
     } finally {
       setLoading(false);
     }

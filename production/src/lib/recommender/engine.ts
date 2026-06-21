@@ -165,3 +165,127 @@ export function buildReasons(
   reasons.push('중복 단어 없이 완성형 키워드만 사용해 어뷰즈 감점을 피했어요.');
   return reasons;
 }
+
+// ═══════════════════════════════════════════════
+// [추가] 키워드 성격 분류 → 상품명 배치 순서 + 다단계 이유 (V2)
+// ═══════════════════════════════════════════════
+
+/** 네이버 식품 상품명 권장 배치 순서에 맞춘 키워드 역할 */
+export type KwRole =
+  | 'region'    // 지역 (부산, 통영, 성주)
+  | 'variety'   // 품종/브랜드 (대저토마토, 방울토마토, 짭짤이)
+  | 'state'     // 상태/당도 (완숙, 고당도, 자연산, 찰)
+  | 'usage'     // 용도 (쥬스용, 가정용, 선물용, 캠핑)
+  | 'grade'     // 등급 (특품, 못난이, 상급, 프리미엄)
+  | 'core'      // 핵심 원물 (메인 키워드 자체)
+  | 'etc';      // 기타
+
+const ROLE_DICT: { role: KwRole; words: RegExp }[] = [
+  { role: 'region',  words: /(부산|통영|성주|제주|해남|상주|영천|나주|완도|동해|신안|국내산|지역)/ },
+  { role: 'variety', words: /(방울토마토|대저토마토|짭짤이|찰토마토|대추|흰다리새우|왕새우|품종|밀키트|세트)/ },
+  { role: 'state',   words: /(완숙|고당도|당도|자연산|생|찰|숙성|냉동|건조|국물|진한|손질)$/ },
+  { role: 'usage',   words: /(용$|가정|선물|업소|캠핑|반찬|국|탕|구이|찜)/ },
+  { role: 'grade',   words: /(특품|특상|상급|최상급|못난이|가성비|프리미엄|등급|호$)/ },
+];
+
+/** 배치 우선순위 (작을수록 앞) */
+const ROLE_ORDER: Record<KwRole, number> = {
+  region: 0, core: 1, variety: 2, state: 3, usage: 4, grade: 5, etc: 6,
+};
+
+export function classifyKeyword(word: string, mainKw: string): KwRole {
+  if (word === mainKw || mainKw.includes(word)) return 'core';
+  for (const { role, words } of ROLE_DICT) {
+    if (words.test(word)) return role;
+  }
+  return 'etc';
+}
+
+export interface RoledKeyword extends KeywordStat {
+  role: KwRole;
+}
+
+/** 점수 정렬된 키워드에 역할을 부여하고, 배치 순서대로 재정렬 */
+export function buildRoledName(
+  main: string,
+  kws: KeywordStat[],
+  extras: { brand?: string } = {},
+  maxWords = 9,
+  maxLen = 50,
+): { name: string; roled: RoledKeyword[] } {
+  const ranked = scoreKeywords(kws).map(k => ({
+    ...k,
+    role: classifyKeyword(k.word, main),
+  })) as RoledKeyword[];
+
+  // 점수 상위에서 maxWords개 선별 후, 역할 순서로 재배치
+  const picked: RoledKeyword[] = [];
+  const used = new Set<string>();
+
+  // 메인 키워드를 core로 먼저 확보
+  picked.push({ word: main, freq: 0, volume: 0, role: 'core' });
+  used.add(main);
+  if (extras.brand) { picked.push({ word: extras.brand, freq: 0, volume: 0, role: 'variety' }); used.add(extras.brand); }
+
+  for (const k of ranked) {
+    if (picked.length >= maxWords) break;
+    if (used.has(k.word)) continue;
+    if ([...used].some(u => u.includes(k.word) || k.word.includes(u))) continue;
+    picked.push(k); used.add(k.word);
+  }
+
+  // 역할 순서 → 같은 역할 내에서는 점수 순
+  const ordered = picked.sort((a, b) => {
+    const r = ROLE_ORDER[a.role] - ROLE_ORDER[b.role];
+    return r !== 0 ? r : (b.score ?? 0) - (a.score ?? 0);
+  });
+
+  // 글자수 제한 적용
+  const out: RoledKeyword[] = [];
+  for (const k of ordered) {
+    if ([...out.map(o => o.word), k.word].join(' ').length > maxLen) continue;
+    out.push(k);
+  }
+  return { name: out.map(o => o.word).join(' '), roled: out };
+}
+
+/** 레퍼런스 수준의 다단계 최적화 이유 생성 */
+export function buildReasonsV2(
+  main: string,
+  roled: RoledKeyword[],
+  excluded: FilteredKeywords,
+): string[] {
+  const name = roled.map(r => r.word).join(' ');
+  const byRole = (role: KwRole) => roled.filter(r => r.role === role).map(r => r.word);
+  const idxOf = (w: string) => roled.findIndex(r => r.word === w) + 1;
+  const reasons: string[] = [];
+
+  const region = byRole('region');
+  if (region.length) {
+    reasons.push(`지역 키워드 "${region[0]}"를 맨 앞에 배치했어요. 네이버 쇼핑에서 지역 기반 검색 유입에 유리하고, 산지 신뢰도와 적합도를 함께 높입니다.`);
+  }
+  reasons.push(`핵심 키워드 "${main}"를 ${idxOf(main)}번째에 배치해 검색 알고리즘의 핵심 매칭 요소를 확보했어요.`);
+
+  const variety = byRole('variety');
+  if (variety.length) {
+    reasons.push(`품종·상품군 키워드(${variety.join(', ')})를 핵심 키워드 뒤에 두어 구매 의도가 높은 검색어를 폭넓게 커버했어요.`);
+  }
+  const state = byRole('state');
+  if (state.length) {
+    reasons.push(`상태·속성 키워드(${state.join(', ')})를 중간에 배치해 상품 특성을 명확히 전달하고 구매 전환을 돕습니다.`);
+  }
+  const usage = byRole('usage');
+  if (usage.length) {
+    reasons.push(`용도 키워드(${usage.join(', ')})를 후방에 배치해 가정용·선물용 등 다양한 소비 상황의 검색 유입을 노렸어요.`);
+  }
+  const grade = byRole('grade');
+  if (grade.length) {
+    reasons.push(`등급 키워드(${grade.join(', ')})로 상품 품질을 명시해 신뢰도를 높였어요.`);
+  }
+  reasons.push(`총 ${roled.length}개 단어, ${name.length}자로 구성했어요. 네이버 권장(50자 내외)과 상위권 최적 구간(7~9단어)에 맞췄습니다.`);
+  if (excluded.excludedNumeric.length) {
+    reasons.push(`숫자·중량 키워드(${excluded.excludedNumeric.slice(0, 3).join(', ')} 등)는 옵션·속성 필드 권장이라 상품명에서 제외했어요.`);
+  }
+  reasons.push('중복 단어 없이 완성형 키워드만 사용해 네이버 알고리즘의 어뷰즈 감점을 회피했습니다.');
+  return reasons;
+}

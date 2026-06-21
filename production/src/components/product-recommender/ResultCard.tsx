@@ -76,10 +76,12 @@ export default function ResultCard({ data, name, mode, currentName, onRegistered
         <div className={styles.reason}>
           <h4 className={styles.metaH4}>💡 왜 이 상품명일까요?</h4>
           <ol className={styles.reasonList}>
-            {[`필수 키워드 "${data.keyword}" 포함`, '상위노출 빈도 1위 키워드 우선 배치',
-              '검색량 최상위 키워드 결합으로 노출 확대', '동일 단어 비연속 배치로 SEO 패널티 회피',
-              `${used.length}개 단어 사용 (네이버 권장 7개 내외)`, '특수문자 0개 · 50자 이내 준수']
-              .map((r, i) => <li key={i}>{r}</li>)}
+            {(data.reasons && data.reasons.length
+              ? data.reasons
+              : [`필수 키워드 "${data.keyword}" 포함`, '상위노출 빈도 1위 키워드 우선 배치',
+                 '검색량 최상위 키워드 결합으로 노출 확대', '동일 단어 비연속 배치로 SEO 패널티 회피',
+                 `${used.length}개 단어 사용 (네이버 권장 7개 내외)`, '특수문자 0개 · 50자 이내 준수']
+            ).map((r, i) => <li key={i}>{r}</li>)}
           </ol>
         </div>
       )}
