@@ -143,6 +143,17 @@
   .ki-label{flex:0 0 70px;font-size:13px;font-weight:700;color:var(--primary);padding-top:4px}
   .ki-pills{display:flex;flex-wrap:wrap;gap:6px}
   .ki-pill em{font-style:normal;margin-left:5px;font-size:11px;color:var(--gray);font-weight:600}
+  /* 워드클라우드 */
+  .wc-box{margin-top:20px}
+  .wc-cloud{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:center;padding:16px 8px}
+  .wc-tag{line-height:1.1;letter-spacing:-.3px}
+  /* 제외 키워드 */
+  .exc-box{margin-top:20px}
+  .exc-h4 em{font-style:normal;font-weight:500;color:var(--gray);font-size:12px;margin-left:6px}
+  .exc-group{display:flex;gap:12px;align-items:flex-start;padding:8px 0}
+  .exc-label{flex:0 0 70px;font-size:13px;font-weight:700;color:var(--gray);padding-top:5px}
+  .exc-pills{display:flex;flex-wrap:wrap;gap:6px}
+  .exc-pill{display:inline-block;background:#F4F2F8;color:var(--gray);border:1px solid var(--line);padding:5px 12px;border-radius:999px;font-size:13px;font-weight:600}
 
   @media(max-width:760px){.meta-grid,.vs{grid-template-columns:1fr}.vs-arrow{transform:rotate(90deg);justify-content:center}}
 </style>
@@ -202,7 +213,8 @@ const DEMO_DB = {
     ],
     competition:{bundleRatio:0.0,avgReview:1.2,totalProducts:40,searchVolume:4680},
     extraTags:["스테비아토마토","못난이토마토","흑토마토","산지직송","유럽종완숙"],
-    oppKeywords:["흑대추방울토마토","부산대저","짭짜리"]
+    oppKeywords:["흑대추방울토마토","부산대저","짭짜리"],
+    excludedKeywords:{numeric:["5kg","2.5kg","1kg","10과"],promo:["특가","당일","산지직송"]}
   },
   "신안새우":{
     category:"식품 > 수산물 > 새우",
@@ -214,7 +226,8 @@ const DEMO_DB = {
     ],
     competition:{bundleRatio:0.45,avgReview:120,totalProducts:40,searchVolume:8200},
     extraTags:["새우구이","대하소금구이","새우장","급속냉동","산지직송"],
-    oppKeywords:["신안대하","손질새우","자연산대하"]
+    oppKeywords:["신안대하","손질새우","자연산대하"],
+    excludedKeywords:{numeric:["1kg","500g","4-5미","30미"],promo:["특가","무료배송"]}
   }
 };
 
@@ -241,6 +254,33 @@ function verdictOf(s){
   if(s<35)return{label:"지금 들어가세요! 🟢",color:"var(--green)",desc:"상위노출 경쟁이 낮은 키워드예요. 상품명 최적화만 잘해도 광고 없이 순위가 올라갑니다."};
   if(s<65)return{label:"해볼 만해요 🟡",color:"var(--yellow)",desc:"경쟁이 보통 수준이에요. 상품명 + 리뷰 관리를 병행하면 충분히 상위권 진입이 가능합니다."};
   return{label:"경쟁이 셉니다 🔴",color:"var(--red)",desc:"이미 강한 셀러들이 자리잡은 키워드예요. 아래 기회 키워드로 우회하는 걸 추천드려요."};
+}
+
+/* ===================== 레퍼런스 대응 렌더 (워드클라우드 / 제외키워드) ===================== */
+/** 키워드 워드클라우드 — freq 기준 글자 크기·색상 스케일 */
+function renderWordCloud(keywords){
+  if(!keywords||!keywords.length)return'';
+  const freqs=keywords.map(k=>k.freq);
+  const max=Math.max(...freqs),min=Math.min(...freqs);
+  const size=f=>max===min?20:14+((f-min)/(max-min))*26;
+  const colors=['var(--primary)','var(--green)','var(--ink)'];
+  const tags=keywords.map((k,i)=>
+    `<span class="wc-tag" style="font-size:${size(k.freq).toFixed(0)}px;font-weight:700;color:${colors[i%3]}">${esc(k.word)}</span>`
+  ).join('');
+  return `<div class="meta-box wc-box"><h4 class="meta-h4">🔑 키워드 분석 (상위 ${keywords.length}개)</h4>
+    <div class="wc-cloud">${tags}</div></div>`;
+}
+
+/** 상품명 제외 키워드 (숫자/중량 · 수식어) */
+function renderExcluded(excluded){
+  if(!excluded)return'';
+  const numeric=excluded.numeric||[],promo=excluded.promo||[];
+  if(!numeric.length&&!promo.length)return'';
+  const row=(label,arr)=>arr.length
+    ?`<div class="exc-group"><span class="exc-label">${label}</span>
+        <div class="exc-pills">${arr.map(w=>`<span class="exc-pill">${esc(w)}</span>`).join('')}</div></div>`:'';
+  return `<div class="meta-box exc-box"><h4 class="meta-h4 exc-h4">🚫 상품명 제외 키워드 <em>(옵션·속성 필드 권장)</em></h4>
+    ${row('숫자/중량',numeric)}${row('수식어',promo)}</div>`;
 }
 
 /* ===================== 추적 저장소 (로컬 목업) ===================== */
@@ -280,6 +320,7 @@ function fromDemo(kw){
     difficulty:calcDifficulty(db.competition),
     extraTags:db.extraTags,
     oppKeywords:db.oppKeywords,
+    excludedKeywords:db.excludedKeywords||null,
     hasVolume:true,
     live:false
   };
@@ -314,6 +355,7 @@ async function fromApi(kw,ex){
     recommendedRange:j.recommendedRange,
     keyInfo:j.keyInfo||[],
     reasons:j.reasons||[],
+    excludedKeywords:j.excludedKeywords||null,
     live:true
   };
 }
@@ -415,6 +457,9 @@ function render(kw,ex,db){
     </div>`;
   }
 
+  // 키워드 워드클라우드 (등장 빈도 기준)
+  html+=renderWordCloud(db.keywords);
+
   const barTitle=db.hasVolume?'📈 키워드별 검색량':'📈 상위 40개 등장 빈도';
   const totalLine=db.hasVolume
     ? `총 노출 검색량 <b>${total.toLocaleString()}회</b>`
@@ -458,6 +503,9 @@ function render(kw,ex,db){
       <div class="len-note">평균 <b>${db.avgWords??'-'}</b>단어 · <b>${db.avgChars??'-'}</b>자 ·
         상위 셀러 권장 <b>${rr.length?rr[0]+'~'+rr[1]:'-'}</b>단어</div></div>`;
   }
+
+  // 상품명 제외 키워드 (숫자/수식어)
+  html+=renderExcluded(db.excludedKeywords);
 
   // 상품 주요정보 (형태/특징/사용부위 등)
   if(db.keyInfo&&db.keyInfo.length){
